@@ -174,6 +174,13 @@ const DEFAULT_SETTINGS = {
     startingBalance: 10000,
     riskPerTrade: 10,
     feeRate: 0.04,
+    // Prop firm simulation (Breakout $5K rules by default)
+    propEnabled: true,
+    propAccountSize: 5000,
+    propProfitTargetPct: 10,
+    propDailyLossPct: 3,
+    propMaxDDPct: 6,
+    propProfitSplitPct: 90,
 };
 function parseCSV(text) {
     const lines = text.trim().split(/\r?\n/);
@@ -476,6 +483,83 @@ function TradingJournal() {
         }
         return buckets;
     }, [filtered]);
+    // Prop firm simulation: replay the exact same trades against a $X account
+    // with the firm's drawdown / daily loss / profit target rules.
+    const propStats = useMemo(() => {
+        const list = filtered;
+        if (list.length === 0)
+            return null;
+        const size = settings.propAccountSize;
+        const profitTarget = size * (settings.propProfitTargetPct / 100);
+        const dailyLossLimit = size * (settings.propDailyLossPct / 100);
+        const maxDDLimit = size * (settings.propMaxDDPct / 100);
+        const ddFloor = size - maxDDLimit; // static drawdown — fixed line you can never cross
+        let equity = size;
+        let worstUnderwater = 0; // largest amount you've ever been BELOW $size (only counts when equity < size)
+        let breach = null; // first rule breach (account would have busted)
+        let targetHitAt = null; // first trade index where profit target was reached
+        const equityCurve = [{ idx: 0, equity: size }];
+        const dailyPnl = {}; // YYYY-MM-DD (UTC) -> net pnl for the day
+        for (let i = 0; i < list.length; i++) {
+            const t = list[i];
+            // Bucket by exit-day in UTC (00:00–24:00 UTC)
+            const day = new Date(t.exitTime).toISOString().slice(0, 10);
+            dailyPnl[day] = (dailyPnl[day] || 0) + t.pnlNet;
+            equity += t.pnlNet;
+            // Drawdown only counts when equity is BELOW the starting balance.
+            // Above $size you have no drawdown — being up doesn't consume the buffer.
+            if (equity < size) {
+                const underwater = size - equity;
+                if (underwater > worstUnderwater)
+                    worstUnderwater = underwater;
+            }
+            equityCurve.push({ idx: i + 1, equity });
+            // Check rule breaches (only record the FIRST breach)
+            // Daily loss is checked intra-day because the account would close immediately
+            // on breach — not at end of day.
+            if (!breach) {
+                if (equity <= ddFloor) {
+                    breach = { rule: 'Max drawdown', detail: `Equity hit ${formatMoney(equity)}, below floor of ${formatMoney(ddFloor)}`, atTrade: i + 1, atDay: day };
+                }
+                else if (dailyPnl[day] <= -dailyLossLimit) {
+                    breach = { rule: 'Daily loss limit', detail: `Lost ${formatMoney(Math.abs(dailyPnl[day]))} on ${day}, limit ${formatMoney(dailyLossLimit)}`, atTrade: i + 1, atDay: day };
+                }
+            }
+            // Track first time profit target was hit (only if no breach yet)
+            if (!targetHitAt && !breach && equity >= size + profitTarget) {
+                targetHitAt = { atTrade: i + 1, atDay: day, equity };
+            }
+        }
+        // Worst daily loss = largest single-day loss across days that CLOSED in the red.
+        // Days that dipped intra-day but closed green don't count.
+        const dayValues = Object.values(dailyPnl);
+        const redDays = dayValues.filter(v => v < 0);
+        const worstDailyLoss = redDays.length ? Math.min(...redDays) : 0;
+        const finalProfit = equity - size;
+        const profitProgressPct = Math.max(0, Math.min(100, (finalProfit / profitTarget) * 100));
+        const ddUsedPct = (worstUnderwater / maxDDLimit) * 100;
+        const dailyLossUsedPct = (Math.abs(worstDailyLoss) / dailyLossLimit) * 100;
+        const tradingDays = Object.keys(dailyPnl).length;
+        const profitableDays = dayValues.filter(v => v > 0).length;
+        const losingDays = redDays.length;
+        const payout = finalProfit > 0 ? finalProfit * (settings.propProfitSplitPct / 100) : 0;
+        let status;
+        if (breach)
+            status = 'fail';
+        else if (targetHitAt)
+            status = 'pass';
+        else
+            status = 'in-progress';
+        return {
+            size, profitTarget, dailyLossLimit, maxDDLimit, ddFloor,
+            equity, finalProfit, payout,
+            maxDDHit: worstUnderwater, ddUsedPct,
+            worstDailyLoss, dailyLossUsedPct,
+            profitProgressPct,
+            breach, targetHitAt, status,
+            equityCurve, dailyPnl, tradingDays, profitableDays, losingDays,
+        };
+    }, [filtered, settings.propAccountSize, settings.propProfitTargetPct, settings.propDailyLossPct, settings.propMaxDDPct, settings.propProfitSplitPct]);
     const sortedTrades = useMemo(() => {
         const arr = [...filtered];
         arr.sort((a, b) => {
@@ -526,7 +610,7 @@ function TradingJournal() {
             React.createElement("button", { onClick: () => setImportMsg(null), style: styles.bannerClose }, "\u00D7"))),
         trades.length === 0 ? (React.createElement(EmptyState, { onPick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, settings: settings, onSettings: saveSettings })) : (React.createElement(React.Fragment, null,
             React.createElement("div", { style: styles.controls },
-                React.createElement("div", { style: styles.tabs }, ['overview', 'analytics', 'trades', 'settings'].map(t => (React.createElement("button", { key: t, onClick: () => setTab(t), style: { ...styles.tab, ...(tab === t ? styles.tabActive : {}) } }, t)))),
+                React.createElement("div", { style: styles.tabs }, ['overview', 'analytics', 'propfirm', 'trades', 'settings'].map(t => (React.createElement("button", { key: t, onClick: () => setTab(t), style: { ...styles.tab, ...(tab === t ? styles.tabActive : {}) } }, t === 'propfirm' ? 'prop firm' : t)))),
                 React.createElement("div", { style: styles.filters },
                     React.createElement("select", { value: filterSymbol, onChange: e => setFilterSymbol(e.target.value), style: styles.select },
                         React.createElement("option", { value: "all" }, "All symbols"),
@@ -537,6 +621,7 @@ function TradingJournal() {
                         React.createElement("option", { value: "short" }, "Shorts only")))),
             tab === 'overview' && stats && React.createElement(Overview, { stats: stats, settings: settings }),
             tab === 'analytics' && stats && React.createElement(Analytics, { stats: stats, sessionStats: sessionStats, hourStats: hourStats }),
+            tab === 'propfirm' && propStats && React.createElement(PropFirm, { propStats: propStats, settings: settings, onChange: saveSettings }),
             tab === 'trades' && (React.createElement(TradesTable, { trades: sortedTrades, sortKey: sortKey, sortDir: sortDir, setSort: setSort })),
             tab === 'settings' && React.createElement(Settings, { settings: settings, onChange: saveSettings }))),
         React.createElement("footer", { style: styles.footer }, trades.length > 0 && React.createElement("span", null,
@@ -730,6 +815,138 @@ function TradesTable({ trades, sortKey, sortDir, setSort }) {
                         formatMoney(t.fees).replace('-', '')),
                     React.createElement("td", { style: { ...styles.td, textAlign: 'right', color: t.pnlNet >= 0 ? '#7fb069' : '#d96459', fontWeight: 600 } }, formatMoney(t.pnlNet))))))))));
 }
+function PropFirm({ propStats, settings, onChange }) {
+    const ps = propStats;
+    const statusColor = ps.status === 'pass' ? '#7fb069' : ps.status === 'fail' ? '#d96459' : '#c9a96b';
+    const statusLabel = ps.status === 'pass' ? 'PROFIT TARGET HIT' : ps.status === 'fail' ? 'ACCOUNT BUSTED' : 'IN PROGRESS';
+    const equityColor = ps.finalProfit >= 0 ? '#7fb069' : '#d96459';
+    return (React.createElement("div", { style: styles.content },
+        React.createElement("div", { style: { ...styles.chartCard, borderLeft: `3px solid ${statusColor}` } },
+            React.createElement("div", { style: styles.propStatusRow },
+                React.createElement("div", null,
+                    React.createElement("div", { style: styles.chartSub },
+                        "Simulated outcome on ",
+                        formatMoney(ps.size, 0),
+                        " prop account"),
+                    React.createElement("div", { style: { ...styles.chartTitle, color: statusColor, marginTop: 4 } }, statusLabel),
+                    ps.breach && (React.createElement("div", { style: styles.propBreachDetail },
+                        "Breached ",
+                        React.createElement("strong", { style: { color: '#e08278' } }, ps.breach.rule),
+                        " at trade #",
+                        ps.breach.atTrade,
+                        " (",
+                        ps.breach.atDay,
+                        "). ",
+                        ps.breach.detail,
+                        ".")),
+                    ps.targetHitAt && (React.createElement("div", { style: styles.propTargetDetail },
+                        "Hit profit target at trade #",
+                        ps.targetHitAt.atTrade,
+                        " (",
+                        ps.targetHitAt.atDay,
+                        ") \u2014 equity ",
+                        formatMoney(ps.targetHitAt.equity),
+                        "."))),
+                React.createElement("div", { style: styles.propPayoutBox },
+                    React.createElement("div", { style: styles.statLabel }, "Your payout"),
+                    React.createElement("div", { style: { ...styles.feeImpactValue, color: ps.payout > 0 ? '#7fb069' : '#5a564c' } }, formatMoney(ps.payout)),
+                    React.createElement("div", { style: styles.statSub },
+                        settings.propProfitSplitPct,
+                        "% of ",
+                        formatMoney(ps.finalProfit),
+                        " profit")))),
+        React.createElement("div", { style: styles.statsGrid },
+            React.createElement(StatCard, { label: "Account equity", value: formatMoney(ps.equity), sub: `${formatPct((ps.finalProfit / ps.size) * 100)} from start`, accent: equityColor }),
+            React.createElement(StatCard, { label: "Profit target", value: formatMoney(ps.profitTarget, 0), sub: `${settings.propProfitTargetPct}% of account` }),
+            React.createElement(StatCard, { label: "Daily loss limit", value: formatMoney(ps.dailyLossLimit, 0), sub: `${settings.propDailyLossPct}% per day` }),
+            React.createElement(StatCard, { label: "Max drawdown", value: formatMoney(ps.maxDDLimit, 0), sub: `${settings.propMaxDDPct}% static · floor ${formatMoney(ps.ddFloor, 0)}` })),
+        React.createElement("div", { style: styles.chartCard },
+            React.createElement("div", { style: styles.chartTitle }, "Rule usage"),
+            React.createElement("div", { style: styles.chartSub }, "How close you came to each limit at the worst point"),
+            React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 18, marginTop: 16 } },
+                React.createElement(RuleBar, { label: "Profit target progress", value: ps.finalProfit > 0 ? formatMoney(ps.finalProfit) : '—', limit: formatMoney(ps.profitTarget, 0), pct: ps.profitProgressPct, color: "#7fb069", inverted: true }),
+                React.createElement(RuleBar, { label: "Max drawdown used", value: formatMoney(ps.maxDDHit), limit: formatMoney(ps.maxDDLimit, 0), pct: ps.ddUsedPct, color: ps.ddUsedPct >= 100 ? '#d96459' : ps.ddUsedPct >= 75 ? '#c9a96b' : '#7fb069' }),
+                React.createElement(RuleBar, { label: "Daily loss", value: ps.worstDailyLoss < 0 ? formatMoney(ps.worstDailyLoss) : 'None', limit: formatMoney(ps.dailyLossLimit, 0), pct: ps.dailyLossUsedPct, color: ps.dailyLossUsedPct >= 100 ? '#d96459' : ps.dailyLossUsedPct >= 75 ? '#c9a96b' : '#7fb069' }))),
+        React.createElement("div", { style: styles.chartCard },
+            React.createElement("div", { style: styles.chartHeader },
+                React.createElement("div", null,
+                    React.createElement("div", { style: styles.chartTitle }, "Account equity simulation"),
+                    React.createElement("div", { style: styles.chartSub },
+                        formatMoney(ps.size, 0),
+                        " starting \u00B7 floor at ",
+                        formatMoney(ps.ddFloor, 0),
+                        " \u00B7 target at ",
+                        formatMoney(ps.size + ps.profitTarget, 0)))),
+            React.createElement(ResponsiveContainer, { width: "100%", height: 280 },
+                React.createElement(LineChart, { data: ps.equityCurve, margin: { top: 10, right: 20, left: 10, bottom: 10 } },
+                    React.createElement(XAxis, { dataKey: "idx", stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' } }),
+                    React.createElement(YAxis, { stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' }, tickFormatter: v => `$${(v / 1000).toFixed(2)}k`, domain: [Math.min(ps.ddFloor - 50, ps.equity - 100), Math.max(ps.size + ps.profitTarget + 50, ps.equity + 100)] }),
+                    React.createElement(Tooltip, { contentStyle: { background: '#1a1816', border: '1px solid #2a2823', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }, labelStyle: { color: '#8a857a' }, formatter: v => [formatMoney(v), 'Equity'], labelFormatter: l => `Trade #${l}` }),
+                    React.createElement(ReferenceLine, { y: ps.size, stroke: "#3a372f", strokeDasharray: "2 4", label: { value: 'Start', fill: '#5a564c', fontSize: 9, position: 'insideTopRight' } }),
+                    React.createElement(ReferenceLine, { y: ps.ddFloor, stroke: "#d96459", strokeDasharray: "3 3", label: { value: 'DD floor', fill: '#d96459', fontSize: 9, position: 'insideTopRight' } }),
+                    React.createElement(ReferenceLine, { y: ps.size + ps.profitTarget, stroke: "#7fb069", strokeDasharray: "3 3", label: { value: 'Target', fill: '#7fb069', fontSize: 9, position: 'insideTopRight' } }),
+                    React.createElement(Line, { type: "monotone", dataKey: "equity", stroke: statusColor, strokeWidth: 1.5, dot: false })))),
+        React.createElement("div", { style: styles.twoCol },
+            React.createElement("div", { style: styles.chartCard },
+                React.createElement("div", { style: styles.chartTitle }, "Trading days"),
+                React.createElement("div", { style: styles.chartSub }, "Daily P&L breakdown"),
+                React.createElement("div", { style: { display: 'flex', gap: 20, marginTop: 16 } },
+                    React.createElement("div", { style: { flex: 1 } },
+                        React.createElement("div", { style: styles.statLabel }, "Total days"),
+                        React.createElement("div", { style: { ...styles.streakValue, color: '#e8e6df' } }, ps.tradingDays)),
+                    React.createElement("div", { style: { flex: 1 } },
+                        React.createElement("div", { style: styles.statLabel }, "Green days"),
+                        React.createElement("div", { style: { ...styles.streakValue, color: '#7fb069' } }, ps.profitableDays)),
+                    React.createElement("div", { style: { flex: 1 } },
+                        React.createElement("div", { style: styles.statLabel }, "Red days"),
+                        React.createElement("div", { style: { ...styles.streakValue, color: '#d96459' } }, ps.losingDays)))),
+            React.createElement("div", { style: styles.chartCard },
+                React.createElement("div", { style: styles.chartTitle }, "Breakout rules"),
+                React.createElement("div", { style: styles.chartSub }, "Edit to match your specific challenge"),
+                React.createElement("div", { style: styles.settingsGrid },
+                    React.createElement("label", { style: styles.label },
+                        "Account size ($)",
+                        React.createElement("input", { type: "number", value: settings.propAccountSize, onChange: e => onChange({ ...settings, propAccountSize: parseFloat(e.target.value) || 0 }), style: styles.input })),
+                    React.createElement("label", { style: styles.label },
+                        "Profit target (%)",
+                        React.createElement("input", { type: "number", step: "0.1", value: settings.propProfitTargetPct, onChange: e => onChange({ ...settings, propProfitTargetPct: parseFloat(e.target.value) || 0 }), style: styles.input })),
+                    React.createElement("label", { style: styles.label },
+                        "Daily loss limit (%)",
+                        React.createElement("input", { type: "number", step: "0.1", value: settings.propDailyLossPct, onChange: e => onChange({ ...settings, propDailyLossPct: parseFloat(e.target.value) || 0 }), style: styles.input })),
+                    React.createElement("label", { style: styles.label },
+                        "Max drawdown (%)",
+                        React.createElement("input", { type: "number", step: "0.1", value: settings.propMaxDDPct, onChange: e => onChange({ ...settings, propMaxDDPct: parseFloat(e.target.value) || 0 }), style: styles.input })),
+                    React.createElement("label", { style: styles.label },
+                        "Profit split (%)",
+                        React.createElement("input", { type: "number", step: "1", value: settings.propProfitSplitPct, onChange: e => onChange({ ...settings, propProfitSplitPct: parseFloat(e.target.value) || 0 }), style: styles.input }))))),
+        React.createElement("div", { style: styles.chartCard },
+            React.createElement("div", { style: styles.chartTitle }, "Reading this"),
+            React.createElement("div", { style: { ...styles.helpText, marginTop: 8 } },
+                "The simulation replays your actual paper trades on a ",
+                formatMoney(ps.size, 0),
+                " account at the same position sizes, checking after each trade whether you'd have breached a rule. Static drawdown means the floor never moves up \u2014 it stays fixed at ",
+                formatMoney(ps.ddFloor, 0),
+                " regardless of how high your equity climbs. One bad day or one bad streak that takes equity below that floor ends the account immediately."))));
+}
+function RuleBar({ label, value, limit, pct, color, inverted }) {
+    const clamped = Math.max(0, Math.min(100, pct));
+    return (React.createElement("div", null,
+        React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 6 } },
+            React.createElement("span", { style: styles.dirBarLabel }, label),
+            React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#a8a399' } },
+                React.createElement("span", { style: { color } }, value),
+                " ",
+                React.createElement("span", { style: { color: '#5a564c' } },
+                    "/ ",
+                    limit))),
+        React.createElement("div", { style: styles.dirBarTrack },
+            React.createElement("div", { style: { ...styles.dirBarFill, width: `${clamped}%`, background: color } })),
+        React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginTop: 4 } },
+            React.createElement("span", { style: styles.dirBarSub }, inverted ? 'progress' : 'used'),
+            React.createElement("span", { style: { ...styles.dirBarPct, color } },
+                clamped.toFixed(1),
+                "%"))));
+}
 function Settings({ settings, onChange }) {
     return (React.createElement("div", { style: styles.content },
         React.createElement("div", { style: styles.chartCard },
@@ -808,6 +1025,10 @@ const styles = {
     feeImpactArrow: { fontFamily: 'JetBrains Mono, monospace', color: '#3a372f', fontSize: 18 },
     feeImpactFoot: { marginTop: 14, fontSize: 11, color: '#6a665b', lineHeight: 1.6 },
     feeImpactMono: { fontFamily: 'JetBrains Mono, monospace', color: '#a8a399' },
+    propStatusRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' },
+    propBreachDetail: { fontSize: 12, color: '#a8a399', marginTop: 12, lineHeight: 1.5, maxWidth: 520 },
+    propTargetDetail: { fontSize: 12, color: '#9bc785', marginTop: 12, lineHeight: 1.5, maxWidth: 520 },
+    propPayoutBox: { textAlign: 'right', minWidth: 180 },
     chartHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
     chartTitle: { fontFamily: 'Fraunces, serif', fontSize: 17, fontWeight: 600, color: '#e8e6df', letterSpacing: '-0.01em' },
     chartSub: { fontSize: 11, color: '#6a665b', marginTop: 4, marginBottom: 8 },
