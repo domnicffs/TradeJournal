@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0a0908" />
+<title>Ledger · Trading Journal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0a0908; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #0f0e0c; }
+  ::-webkit-scrollbar-thumb { background: #2a2823; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a372f; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  #loading {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #c9a96b; font-family: 'JetBrains Mono', monospace; font-size: 14px;
+    letter-spacing: 0.2em;
+    flex-direction: column; gap: 16px; padding: 40px; text-align: center;
+  }
+  #loading .err {
+    color: #d96459; max-width: 500px; line-height: 1.6;
+    font-family: 'Inter', sans-serif; letter-spacing: normal; font-size: 13px;
+  }
+  #loading .hint { color: #6a665b; font-size: 11px; max-width: 500px; line-height: 1.6;
+    font-family: 'Inter', sans-serif; letter-spacing: normal; }
+</style>
+</head>
+<body>
+<div id="root"><div id="loading"><div>LOADING…</div></div></div>
+
+<script>
+// Robust loader: try multiple CDNs in sequence for each library
+(function() {
+  const root = document.getElementById('root');
+  const loading = document.getElementById('loading');
+
+  function showError(msg, hint) {
+    loading.innerHTML =
+      '<div class="err">⚠ ' + msg + '</div>' +
+      (hint ? '<div class="hint">' + hint + '</div>' : '');
+  }
+
+  // Order matters: each library must load AFTER its dependencies.
+  // PropTypes is required by Recharts 2.x (it's a peer dep, not bundled).
+  const libs = [
+    {
+      name: 'React',
+      check: () => typeof React !== 'undefined',
+      urls: [
+        'https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js',
+        'https://unpkg.com/react@18.3.1/umd/react.production.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js'
+      ]
+    },
+    {
+      name: 'ReactDOM',
+      check: () => typeof ReactDOM !== 'undefined',
+      urls: [
+        'https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js',
+        'https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js'
+      ]
+    },
+    {
+      name: 'PropTypes',
+      check: () => typeof PropTypes !== 'undefined',
+      urls: [
+        'https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js',
+        'https://unpkg.com/prop-types@15.8.1/prop-types.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js'
+      ]
+    },
+    {
+      name: 'Recharts',
+      check: () => typeof Recharts !== 'undefined',
+      urls: [
+        'https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js',
+        'https://unpkg.com/recharts@2.12.7/umd/Recharts.min.js',
+        'https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.js',
+        'https://unpkg.com/recharts@2.12.7/umd/Recharts.js'
+      ]
+    }
+  ];
+
+  // Sequential loader: only try the next URL after the current one fails.
+  // Crucially we wait for onload before checking, and use onerror to skip.
+  function loadFromUrls(lib, urlIdx) {
+    return new Promise((resolve, reject) => {
+      if (lib.check()) return resolve();
+      if (urlIdx >= lib.urls.length) {
+        return reject(new Error('All CDNs failed for ' + lib.name));
+      }
+      const s = document.createElement('script');
+      s.src = lib.urls[urlIdx];
+      s.crossOrigin = 'anonymous';
+      let done = false;
+      const finish = (success) => {
+        if (done) return; done = true;
+        if (success && lib.check()) resolve();
+        else loadFromUrls(lib, urlIdx + 1).then(resolve, reject);
+      };
+      s.onload = () => finish(true);
+      s.onerror = () => finish(false);
+      // Safety timeout in case script hangs
+      setTimeout(() => finish(false), 10000);
+      document.head.appendChild(s);
+    });
+  }
+
+  async function loadAll() {
+    try {
+      // Load in strict order, one at a time, so each library
+      // is fully available before the next one starts.
+      for (const lib of libs) {
+        await loadFromUrls(lib, 0);
+      }
+      runApp();
+    } catch (err) {
+      showError(
+        'Could not load required libraries. Usually caused by an ad blocker, browser extension, or restrictive network.',
+        'Try: disable ad blockers for this page, try a different browser, or try mobile data instead of WiFi. Failure: ' + err.message
+      );
+      console.error(err);
+    }
+  }
+
+  function runApp() {
+    try {
+      window.__startApp();
+    } catch (err) {
+      showError('App crashed on startup: ' + err.message, 'Open DevTools console for details.');
+      console.error(err);
+    }
+  }
+
+  loadAll();
+})();
+</script>
+
+<script>
+// The compiled app code is wrapped so it only runs AFTER all libs have loaded.
+window.__startApp = function() {
+"use strict";
+const { useState, useEffect, useMemo, useRef } = React;
+const { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell } = Recharts;
+const Upload = (p) => React.createElement("svg", { width: p.size || 14, height: p.size || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+    React.createElement("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }),
+    React.createElement("polyline", { points: "17 8 12 3 7 8" }),
+    React.createElement("line", { x1: "12", y1: "3", x2: "12", y2: "15" }));
+const Download = (p) => React.createElement("svg", { width: p.size || 14, height: p.size || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+    React.createElement("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }),
+    React.createElement("polyline", { points: "7 10 12 15 17 10" }),
+    React.createElement("line", { x1: "12", y1: "15", x2: "12", y2: "3" }));
+const Trash2 = (p) => React.createElement("svg", { width: p.size || 14, height: p.size || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+    React.createElement("polyline", { points: "3 6 5 6 21 6" }),
+    React.createElement("path", { d: "M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" }),
+    React.createElement("path", { d: "M10 11v6M14 11v6" }));
+const AlertCircle = (p) => React.createElement("svg", { width: p.size || 14, height: p.size || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+    React.createElement("circle", { cx: "12", cy: "12", r: "10" }),
+    React.createElement("line", { x1: "12", y1: "8", x2: "12", y2: "12" }),
+    React.createElement("line", { x1: "12", y1: "16", x2: "12.01", y2: "16" }));
+const ChevronUp = (p) => React.createElement("svg", { width: p.size || 10, height: p.size || 10, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+    React.createElement("polyline", { points: "18 15 12 9 6 15" }));
+const ChevronDown = (p) => React.createElement("svg", { width: p.size || 10, height: p.size || 10, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+    React.createElement("polyline", { points: "6 9 12 15 18 9" }));
+const STORAGE_KEY = 'trades:v1';
+const SETTINGS_KEY = 'settings:v1';
+const DEFAULT_SETTINGS = {
+    startingBalance: 10000,
+    riskPerTrade: 10,
+    feeRate: 0.04,
+};
+function parseCSV(text) {
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2)
+        return [];
+    const splitRow = (row) => {
+        const out = [];
+        let cur = '', q = false;
+        for (let i = 0; i < row.length; i++) {
+            const c = row[i];
+            if (c === '"') {
+                q = !q;
+                continue;
+            }
+            if (c === ',' && !q) {
+                out.push(cur);
+                cur = '';
+                continue;
+            }
+            cur += c;
+        }
+        out.push(cur);
+        return out.map(s => s.trim());
+    };
+    const headers = splitRow(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    return lines.slice(1).map(l => {
+        const cells = splitRow(l);
+        const obj = {};
+        headers.forEach((h, i) => { var _a; return obj[h] = (_a = cells[i]) !== null && _a !== void 0 ? _a : ''; });
+        return obj;
+    });
+}
+function normaliseFill(row) {
+    const sym = row.symbol || row.instrument || '';
+    const sideRaw = (row.side || row.action || row.type || '').toLowerCase();
+    const side = sideRaw.includes('sell') || sideRaw.includes('short') ? 'sell' : 'buy';
+    const qty = parseFloat(row.qty || row.quantity || row.size || row.filledqty || '0') || 0;
+    const price = parseFloat(row.fillprice || row.price || row.avgfillprice || row.executionprice || '0') || 0;
+    const timeStr = row.closingtime || row.fillingtime || row.placingtime || row.time || row.date || row.executiontime || '';
+    const status = (row.status || '').toLowerCase();
+    const time = timeStr ? new Date(timeStr).getTime() : NaN;
+    return { symbol: sym, side, qty, price, time, status };
+}
+function pairFills(fills) {
+    const valid = fills
+        .filter(f => f.symbol && f.qty > 0 && f.price > 0 && !isNaN(f.time))
+        .filter(f => !f.status || f.status.includes('fill') || f.status === 'closed' || f.status === '')
+        .sort((a, b) => a.time - b.time);
+    const trades = [];
+    const open = {};
+    for (const f of valid) {
+        open[f.symbol] = open[f.symbol] || [];
+        const lots = open[f.symbol];
+        let remaining = f.qty;
+        while (remaining > 0 && lots.length > 0 && lots[0].side !== f.side) {
+            const lot = lots[0];
+            const matchQty = Math.min(remaining, lot.qty);
+            const isLong = lot.side === 'buy';
+            const entryPrice = lot.price;
+            const exitPrice = f.price;
+            const pnl = isLong
+                ? (exitPrice - entryPrice) * matchQty
+                : (entryPrice - exitPrice) * matchQty;
+            const rMultiple = (exitPrice - entryPrice) / entryPrice * (isLong ? 1 : -1);
+            trades.push({
+                id: `${f.symbol}-${lot.time}-${f.time}-${trades.length}`,
+                symbol: f.symbol,
+                direction: isLong ? 'long' : 'short',
+                qty: matchQty,
+                entryPrice,
+                exitPrice,
+                entryTime: lot.time,
+                exitTime: f.time,
+                pnl,
+                rMultiple,
+                pnlPct: rMultiple * 100,
+            });
+            lot.qty -= matchQty;
+            remaining -= matchQty;
+            if (lot.qty <= 0.0000001)
+                lots.shift();
+        }
+        if (remaining > 0) {
+            lots.push({ side: f.side, qty: remaining, price: f.price, time: f.time });
+        }
+    }
+    return trades.sort((a, b) => a.exitTime - b.exitTime);
+}
+function formatMoney(n, dp = 2) {
+    if (!isFinite(n))
+        return '—';
+    const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+    return (n < 0 ? '-$' : '$') + s;
+}
+function formatPct(n, dp = 2) { return `${n >= 0 ? '+' : ''}${n.toFixed(dp)}%`; }
+function formatDate(ts) {
+    const d = new Date(ts);
+    return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+function applyFees(t, feeRatePct) {
+    const r = (feeRatePct || 0) / 100;
+    const entryNotional = t.entryPrice * t.qty;
+    const exitNotional = t.exitPrice * t.qty;
+    const fees = (entryNotional + exitNotional) * r;
+    const pnlNet = t.pnl - fees;
+    const feeCostPct = entryNotional > 0 ? (fees / entryNotional) * 100 : 0;
+    const pnlPctNet = t.pnlPct - feeCostPct;
+    const rMultipleNet = t.rMultiple - (feeCostPct / 100);
+    return { ...t, fees, pnlNet, pnlPctNet, rMultipleNet };
+}
+function sessionOf(ts) {
+    const h = new Date(ts).getUTCHours();
+    if (h >= 0 && h < 7)
+        return 'Asia';
+    if (h >= 7 && h < 12)
+        return 'London';
+    if (h >= 12 && h < 16)
+        return 'Overlap';
+    if (h >= 16 && h < 21)
+        return 'NY';
+    return 'After-hours';
+}
+function TradingJournal() {
+    const [trades, setTrades] = useState([]);
+    const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+    const [tab, setTab] = useState('overview');
+    const [importMsg, setImportMsg] = useState(null);
+    const [sortKey, setSortKey] = useState('exitTime');
+    const [sortDir, setSortDir] = useState('desc');
+    const [filterSymbol, setFilterSymbol] = useState('all');
+    const [filterDir, setFilterDir] = useState('all');
+    const fileRef = useRef(null);
+    useEffect(() => {
+        try {
+            const t = localStorage.getItem(STORAGE_KEY);
+            if (t)
+                setTrades(JSON.parse(t));
+        }
+        catch (_a) { }
+        try {
+            const s = localStorage.getItem(SETTINGS_KEY);
+            if (s)
+                setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(s) });
+        }
+        catch (_b) { }
+    }, []);
+    const saveTrades = (next) => {
+        setTrades(next);
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        }
+        catch (_a) { }
+    };
+    const saveSettings = (next) => {
+        setSettings(next);
+        try {
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+        }
+        catch (_a) { }
+    };
+    const handleFile = async (e) => {
+        var _a;
+        const file = (_a = e.target.files) === null || _a === void 0 ? void 0 : _a[0];
+        if (!file)
+            return;
+        const text = await file.text();
+        try {
+            const rows = parseCSV(text);
+            const fills = rows.map(normaliseFill);
+            const newTrades = pairFills(fills);
+            if (newTrades.length === 0) {
+                setImportMsg({ type: 'err', text: 'No valid trades found. Check this is a TradingView Order History export.' });
+            }
+            else {
+                const existing = new Map(trades.map(t => [t.id, t]));
+                for (const t of newTrades)
+                    existing.set(t.id, t);
+                const merged = Array.from(existing.values()).sort((a, b) => a.exitTime - b.exitTime);
+                saveTrades(merged);
+                setImportMsg({ type: 'ok', text: `Imported ${newTrades.length} round-trip trade${newTrades.length === 1 ? '' : 's'}.` });
+            }
+        }
+        catch (err) {
+            setImportMsg({ type: 'err', text: 'Failed to parse CSV: ' + err.message });
+        }
+        e.target.value = '';
+    };
+    const clearAll = () => {
+        if (!confirm('Delete all trades? This cannot be undone.'))
+            return;
+        saveTrades([]);
+        setImportMsg(null);
+    };
+    const exportJSON = () => {
+        const blob = new Blob([JSON.stringify({ trades, settings }, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `journal-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+    const filtered = useMemo(() => {
+        return trades
+            .filter(t => (filterSymbol === 'all' || t.symbol === filterSymbol) &&
+            (filterDir === 'all' || t.direction === filterDir))
+            .map(t => applyFees(t, settings.feeRate));
+    }, [trades, filterSymbol, filterDir, settings.feeRate]);
+    const symbols = useMemo(() => Array.from(new Set(trades.map(t => t.symbol))), [trades]);
+    const stats = useMemo(() => {
+        var _a, _b;
+        const list = filtered;
+        const n = list.length;
+        if (n === 0)
+            return null;
+        const wins = list.filter(t => t.pnlNet > 0);
+        const losses = list.filter(t => t.pnlNet < 0);
+        const breakeven = list.filter(t => t.pnlNet === 0);
+        const longs = list.filter(t => t.direction === 'long');
+        const shorts = list.filter(t => t.direction === 'short');
+        const totalPnl = list.reduce((a, t) => a + t.pnlNet, 0);
+        const totalGross = list.reduce((a, t) => a + t.pnl, 0);
+        const totalFees = list.reduce((a, t) => a + t.fees, 0);
+        const grossWin = wins.reduce((a, t) => a + t.pnlNet, 0);
+        const grossLoss = Math.abs(losses.reduce((a, t) => a + t.pnlNet, 0));
+        const winRate = (wins.length / n) * 100;
+        const avgWin = wins.length ? grossWin / wins.length : 0;
+        const avgLoss = losses.length ? grossLoss / losses.length : 0;
+        const profitFactor = grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0;
+        const avgRR = avgLoss > 0 ? avgWin / avgLoss : 0;
+        const expectancy = totalPnl / n;
+        const avgFeePerTrade = totalFees / n;
+        let eq = settings.startingBalance;
+        let peak = eq;
+        let maxDD = 0;
+        let maxDDPct = 0;
+        const curve = [{ idx: 0, equity: eq, equityGross: eq, time: (_b = (_a = list[0]) === null || _a === void 0 ? void 0 : _a.entryTime) !== null && _b !== void 0 ? _b : Date.now() }];
+        let eqGross = settings.startingBalance;
+        for (let i = 0; i < list.length; i++) {
+            eq += list[i].pnlNet;
+            eqGross += list[i].pnl;
+            peak = Math.max(peak, eq);
+            const dd = peak - eq;
+            const ddPct = peak > 0 ? (dd / peak) * 100 : 0;
+            if (dd > maxDD)
+                maxDD = dd;
+            if (ddPct > maxDDPct)
+                maxDDPct = ddPct;
+            curve.push({ idx: i + 1, equity: eq, equityGross: eqGross, time: list[i].exitTime });
+        }
+        let curStreak = 0, curStreakSign = 0, longestWin = 0, longestLoss = 0;
+        for (const t of list) {
+            const sign = t.pnlNet > 0 ? 1 : t.pnlNet < 0 ? -1 : 0;
+            if (sign === curStreakSign && sign !== 0)
+                curStreak++;
+            else {
+                curStreak = sign === 0 ? 0 : 1;
+                curStreakSign = sign;
+            }
+            if (sign === 1)
+                longestWin = Math.max(longestWin, curStreak);
+            if (sign === -1)
+                longestLoss = Math.max(longestLoss, curStreak);
+        }
+        return {
+            n, wins: wins.length, losses: losses.length, breakeven: breakeven.length,
+            longs: longs.length, shorts: shorts.length,
+            longsWinRate: longs.length ? (longs.filter(t => t.pnlNet > 0).length / longs.length) * 100 : 0,
+            shortsWinRate: shorts.length ? (shorts.filter(t => t.pnlNet > 0).length / shorts.length) * 100 : 0,
+            totalPnl, totalGross, totalFees, avgFeePerTrade,
+            grossWin, grossLoss, winRate, avgWin, avgLoss, profitFactor, avgRR,
+            expectancy, curve, maxDD, maxDDPct, peak,
+            longestWin, longestLoss,
+            finalEquity: eq, finalEquityGross: eqGross,
+        };
+    }, [filtered, settings.startingBalance]);
+    const sessionStats = useMemo(() => {
+        const buckets = {};
+        for (const t of filtered) {
+            const s = sessionOf(t.entryTime);
+            if (!buckets[s])
+                buckets[s] = { session: s, n: 0, wins: 0, pnl: 0 };
+            buckets[s].n++;
+            buckets[s].pnl += t.pnlNet;
+            if (t.pnlNet > 0)
+                buckets[s].wins++;
+        }
+        const order = ['Asia', 'London', 'Overlap', 'NY', 'After-hours'];
+        return order.map(s => buckets[s] || { session: s, n: 0, wins: 0, pnl: 0 })
+            .map(b => ({ ...b, winRate: b.n ? (b.wins / b.n) * 100 : 0 }));
+    }, [filtered]);
+    const hourStats = useMemo(() => {
+        const buckets = Array.from({ length: 24 }, (_, h) => ({ hour: h, n: 0, pnl: 0, wins: 0 }));
+        for (const t of filtered) {
+            const h = new Date(t.entryTime).getUTCHours();
+            buckets[h].n++;
+            buckets[h].pnl += t.pnlNet;
+            if (t.pnlNet > 0)
+                buckets[h].wins++;
+        }
+        return buckets;
+    }, [filtered]);
+    const sortedTrades = useMemo(() => {
+        const arr = [...filtered];
+        arr.sort((a, b) => {
+            const va = a[sortKey], vb = b[sortKey];
+            if (va < vb)
+                return sortDir === 'asc' ? -1 : 1;
+            if (va > vb)
+                return sortDir === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return arr;
+    }, [filtered, sortKey, sortDir]);
+    const setSort = (k) => {
+        if (sortKey === k)
+            setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+        else {
+            setSortKey(k);
+            setSortDir('desc');
+        }
+    };
+    return (React.createElement("div", { style: styles.app },
+        React.createElement("header", { style: styles.header },
+            React.createElement("div", { style: styles.brand },
+                React.createElement("div", { style: styles.brandMark }, "\u25E2\u25E3"),
+                React.createElement("div", null,
+                    React.createElement("div", { style: styles.brandTitle }, "LEDGER"),
+                    React.createElement("div", { style: styles.brandSub }, "paper trade journal \u00B7 btc \u00B7 eth"))),
+            React.createElement("div", { style: styles.headerActions },
+                React.createElement("div", { style: styles.feeChip },
+                    React.createElement("span", { style: styles.feeChipLabel }, "Fee/leg"),
+                    React.createElement("input", { type: "number", step: "0.01", min: "0", value: settings.feeRate, onChange: e => saveSettings({ ...settings, feeRate: parseFloat(e.target.value) || 0 }), style: styles.feeChipInput }),
+                    React.createElement("span", { style: styles.feeChipUnit }, "%")),
+                React.createElement("button", { style: styles.btnGhost, onClick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); } },
+                    React.createElement(Upload, null),
+                    " ",
+                    React.createElement("span", null, "Import")),
+                React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: 'none' } }),
+                React.createElement("button", { style: styles.btnGhost, onClick: exportJSON, disabled: !trades.length },
+                    React.createElement(Download, null),
+                    " ",
+                    React.createElement("span", null, "Export")),
+                React.createElement("button", { style: styles.btnDanger, onClick: clearAll, disabled: !trades.length },
+                    React.createElement(Trash2, null)))),
+        importMsg && (React.createElement("div", { style: { ...styles.banner, ...(importMsg.type === 'ok' ? styles.bannerOk : styles.bannerErr) } },
+            React.createElement(AlertCircle, null),
+            " ",
+            importMsg.text,
+            React.createElement("button", { onClick: () => setImportMsg(null), style: styles.bannerClose }, "\u00D7"))),
+        trades.length === 0 ? (React.createElement(EmptyState, { onPick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, settings: settings, onSettings: saveSettings })) : (React.createElement(React.Fragment, null,
+            React.createElement("div", { style: styles.controls },
+                React.createElement("div", { style: styles.tabs }, ['overview', 'analytics', 'trades', 'settings'].map(t => (React.createElement("button", { key: t, onClick: () => setTab(t), style: { ...styles.tab, ...(tab === t ? styles.tabActive : {}) } }, t)))),
+                React.createElement("div", { style: styles.filters },
+                    React.createElement("select", { value: filterSymbol, onChange: e => setFilterSymbol(e.target.value), style: styles.select },
+                        React.createElement("option", { value: "all" }, "All symbols"),
+                        symbols.map(s => React.createElement("option", { key: s, value: s }, s))),
+                    React.createElement("select", { value: filterDir, onChange: e => setFilterDir(e.target.value), style: styles.select },
+                        React.createElement("option", { value: "all" }, "All directions"),
+                        React.createElement("option", { value: "long" }, "Longs only"),
+                        React.createElement("option", { value: "short" }, "Shorts only")))),
+            tab === 'overview' && stats && React.createElement(Overview, { stats: stats, settings: settings }),
+            tab === 'analytics' && stats && React.createElement(Analytics, { stats: stats, sessionStats: sessionStats, hourStats: hourStats }),
+            tab === 'trades' && (React.createElement(TradesTable, { trades: sortedTrades, sortKey: sortKey, sortDir: sortDir, setSort: setSort })),
+            tab === 'settings' && React.createElement(Settings, { settings: settings, onChange: saveSettings }))),
+        React.createElement("footer", { style: styles.footer }, trades.length > 0 && React.createElement("span", null,
+            trades.length,
+            " trades on file \u00B7 ",
+            symbols.join(' · ')))));
+}
+function EmptyState({ onPick, settings, onSettings }) {
+    return (React.createElement("div", { style: styles.empty },
+        React.createElement("div", { style: styles.emptyMark }, "\u25E2\u25E3"),
+        React.createElement("h2", { style: styles.emptyTitle }, "No trades yet"),
+        React.createElement("p", { style: styles.emptyText }, "Export your TradingView paper trading order history as CSV and drop it in."),
+        React.createElement("div", { style: styles.emptySteps },
+            React.createElement("div", { style: styles.step },
+                React.createElement("span", { style: styles.stepNum }, "01"),
+                " Open the Trading Panel in TradingView, click your account name"),
+            React.createElement("div", { style: styles.step },
+                React.createElement("span", { style: styles.stepNum }, "02"),
+                " Choose Export data\u2026, select History, click Export"),
+            React.createElement("div", { style: styles.step },
+                React.createElement("span", { style: styles.stepNum }, "03"),
+                " Import the downloaded CSV here. Fills are paired into round-trip trades.")),
+        React.createElement("button", { style: styles.btnPrimary, onClick: onPick },
+            React.createElement(Upload, null),
+            " Choose CSV file"),
+        React.createElement("div", { style: styles.emptySettings },
+            React.createElement("label", { style: styles.label },
+                "Starting balance ($)",
+                React.createElement("input", { type: "number", value: settings.startingBalance, onChange: e => onSettings({ ...settings, startingBalance: parseFloat(e.target.value) || 0 }), style: styles.input })))));
+}
+function StatCard({ label, value, sub, accent, mono = true }) {
+    return (React.createElement("div", { style: styles.statCard },
+        React.createElement("div", { style: styles.statLabel }, label),
+        React.createElement("div", { style: { ...styles.statValue, ...(mono ? { fontFamily: 'JetBrains Mono, ui-monospace, monospace' } : {}), color: accent || '#e8e6df' } }, value),
+        sub && React.createElement("div", { style: styles.statSub }, sub)));
+}
+function Overview({ stats, settings }) {
+    const pnlColor = stats.totalPnl >= 0 ? '#7fb069' : '#d96459';
+    const grossColor = stats.totalGross >= 0 ? '#7fb069' : '#d96459';
+    const feeImpactPct = stats.totalGross !== 0 ? (stats.totalFees / Math.abs(stats.totalGross)) * 100 : 0;
+    return (React.createElement("div", { style: styles.content },
+        React.createElement("div", { style: styles.statsGrid },
+            React.createElement(StatCard, { label: "Net P&L", value: formatMoney(stats.totalPnl), sub: `${formatPct((stats.totalPnl / settings.startingBalance) * 100)} on starting balance`, accent: pnlColor }),
+            React.createElement(StatCard, { label: "Equity", value: formatMoney(stats.finalEquity), sub: `Peak ${formatMoney(stats.peak)}` }),
+            React.createElement(StatCard, { label: "Win rate", value: `${stats.winRate.toFixed(1)}%`, sub: `${stats.wins}W · ${stats.losses}L${stats.breakeven ? ` · ${stats.breakeven}BE` : ''}` }),
+            React.createElement(StatCard, { label: "Profit factor", value: isFinite(stats.profitFactor) ? stats.profitFactor.toFixed(2) : '∞', sub: `Gross ${formatMoney(stats.grossWin, 0)} / ${formatMoney(stats.grossLoss, 0)}` }),
+            React.createElement(StatCard, { label: "Avg R:R", value: stats.avgRR.toFixed(2), sub: `Avg win ${formatMoney(stats.avgWin)} · loss ${formatMoney(stats.avgLoss)}` }),
+            React.createElement(StatCard, { label: "Expectancy", value: formatMoney(stats.expectancy), sub: "per trade, post-fee" }),
+            React.createElement(StatCard, { label: "Max drawdown", value: formatMoney(stats.maxDD), sub: `${stats.maxDDPct.toFixed(2)}% from peak`, accent: "#d96459" }),
+            React.createElement(StatCard, { label: "Trades", value: stats.n.toString(), sub: `${stats.longs} long · ${stats.shorts} short` })),
+        React.createElement("div", { style: styles.feeImpactCard },
+            React.createElement("div", { style: styles.feeImpactHeader },
+                React.createElement("div", null,
+                    React.createElement("div", { style: styles.chartTitle }, "Fee impact"),
+                    React.createElement("div", { style: styles.chartSub },
+                        settings.feeRate,
+                        "% per leg \u00B7 ",
+                        (settings.feeRate * 2).toFixed(2),
+                        "% round-trip on notional")),
+                React.createElement("div", { style: styles.feeImpactBadge },
+                    feeImpactPct.toFixed(1),
+                    "% of gross")),
+            React.createElement("div", { style: styles.feeImpactGrid },
+                React.createElement("div", { style: styles.feeImpactCol },
+                    React.createElement("div", { style: styles.feeImpactLabel }, "Gross P&L"),
+                    React.createElement("div", { style: { ...styles.feeImpactValue, color: grossColor } }, formatMoney(stats.totalGross))),
+                React.createElement("div", { style: styles.feeImpactArrow }, "\u2192"),
+                React.createElement("div", { style: styles.feeImpactCol },
+                    React.createElement("div", { style: styles.feeImpactLabel }, "Total fees"),
+                    React.createElement("div", { style: { ...styles.feeImpactValue, color: '#c9a96b' } },
+                        "\u2212",
+                        formatMoney(stats.totalFees).replace('-', ''))),
+                React.createElement("div", { style: styles.feeImpactArrow }, "="),
+                React.createElement("div", { style: styles.feeImpactCol },
+                    React.createElement("div", { style: styles.feeImpactLabel }, "Net P&L"),
+                    React.createElement("div", { style: { ...styles.feeImpactValue, color: pnlColor } }, formatMoney(stats.totalPnl)))),
+            React.createElement("div", { style: styles.feeImpactFoot },
+                "Avg ",
+                React.createElement("span", { style: styles.feeImpactMono }, formatMoney(stats.avgFeePerTrade)),
+                " fees per trade \u00B7",
+                ' ',
+                "Final equity gross would be ",
+                React.createElement("span", { style: styles.feeImpactMono }, formatMoney(stats.finalEquityGross)))),
+        React.createElement("div", { style: styles.chartCard },
+            React.createElement("div", { style: styles.chartHeader },
+                React.createElement("div", null,
+                    React.createElement("div", { style: styles.chartTitle }, "Equity curve"),
+                    React.createElement("div", { style: styles.chartSub },
+                        "Net (solid) vs gross (dashed) from ",
+                        formatMoney(settings.startingBalance, 0)))),
+            React.createElement(ResponsiveContainer, { width: "100%", height: 280 },
+                React.createElement(LineChart, { data: stats.curve, margin: { top: 10, right: 20, left: 10, bottom: 10 } },
+                    React.createElement(XAxis, { dataKey: "idx", stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' } }),
+                    React.createElement(YAxis, { stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' }, tickFormatter: v => `$${(v / 1000).toFixed(1)}k` }),
+                    React.createElement(Tooltip, { contentStyle: { background: '#1a1816', border: '1px solid #2a2823', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }, labelStyle: { color: '#8a857a' }, formatter: (v, k) => [formatMoney(v), k === 'equity' ? 'Net' : 'Gross'], labelFormatter: l => `Trade #${l}` }),
+                    React.createElement(ReferenceLine, { y: settings.startingBalance, stroke: "#3a372f", strokeDasharray: "2 4" }),
+                    React.createElement(Line, { type: "monotone", dataKey: "equityGross", stroke: "#5a564c", strokeWidth: 1, strokeDasharray: "3 3", dot: false }),
+                    React.createElement(Line, { type: "monotone", dataKey: "equity", stroke: pnlColor, strokeWidth: 1.5, dot: false }))))));
+}
+function Analytics({ stats, sessionStats, hourStats }) {
+    return (React.createElement("div", { style: styles.content },
+        React.createElement("div", { style: styles.twoCol },
+            React.createElement("div", { style: styles.chartCard },
+                React.createElement("div", { style: styles.chartTitle }, "Long vs Short"),
+                React.createElement("div", { style: styles.chartSub }, "Distribution and win rate by direction"),
+                React.createElement("div", { style: styles.dirBars },
+                    React.createElement(DirBar, { label: "LONG", count: stats.longs, winRate: stats.longsWinRate, color: "#7fb069" }),
+                    React.createElement(DirBar, { label: "SHORT", count: stats.shorts, winRate: stats.shortsWinRate, color: "#d96459" }))),
+            React.createElement("div", { style: styles.chartCard },
+                React.createElement("div", { style: styles.chartTitle }, "Streaks"),
+                React.createElement("div", { style: styles.chartSub }, "Discipline pressure points"),
+                React.createElement("div", { style: styles.streaks },
+                    React.createElement("div", { style: styles.streakItem },
+                        React.createElement("div", { style: styles.streakLabel }, "Longest win streak"),
+                        React.createElement("div", { style: { ...styles.streakValue, color: '#7fb069' } }, stats.longestWin)),
+                    React.createElement("div", { style: styles.streakItem },
+                        React.createElement("div", { style: styles.streakLabel }, "Longest loss streak"),
+                        React.createElement("div", { style: { ...styles.streakValue, color: '#d96459' } }, stats.longestLoss))))),
+        React.createElement("div", { style: styles.chartCard },
+            React.createElement("div", { style: styles.chartTitle }, "Performance by session (UTC)"),
+            React.createElement("div", { style: styles.chartSub }, "Asia 00\u201307 \u00B7 London 07\u201312 \u00B7 Overlap 12\u201316 \u00B7 NY 16\u201321 \u00B7 After 21\u201324"),
+            React.createElement(ResponsiveContainer, { width: "100%", height: 220 },
+                React.createElement(BarChart, { data: sessionStats, margin: { top: 20, right: 20, left: 10, bottom: 10 } },
+                    React.createElement(XAxis, { dataKey: "session", stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' } }),
+                    React.createElement(YAxis, { stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' }, tickFormatter: v => `$${v.toFixed(0)}` }),
+                    React.createElement(Tooltip, { contentStyle: { background: '#1a1816', border: '1px solid #2a2823', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }, labelStyle: { color: '#8a857a' }, formatter: (v, k, p) => [formatMoney(v), `P&L (${p.payload.n} trades · ${p.payload.winRate.toFixed(0)}% WR)`] }),
+                    React.createElement(Bar, { dataKey: "pnl", radius: [2, 2, 0, 0] }, sessionStats.map((s, i) => (React.createElement(Cell, { key: i, fill: s.pnl >= 0 ? '#7fb069' : '#d96459' }))))))),
+        React.createElement("div", { style: styles.chartCard },
+            React.createElement("div", { style: styles.chartTitle }, "Performance by hour (UTC entry time)"),
+            React.createElement("div", { style: styles.chartSub }, "Find your sharpest hours"),
+            React.createElement(ResponsiveContainer, { width: "100%", height: 220 },
+                React.createElement(BarChart, { data: hourStats, margin: { top: 20, right: 20, left: 10, bottom: 10 } },
+                    React.createElement(XAxis, { dataKey: "hour", stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' }, tickFormatter: h => `${h}h` }),
+                    React.createElement(YAxis, { stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' }, tickFormatter: v => `$${v.toFixed(0)}` }),
+                    React.createElement(Tooltip, { contentStyle: { background: '#1a1816', border: '1px solid #2a2823', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }, labelStyle: { color: '#8a857a' }, formatter: (v, k, p) => [formatMoney(v), `${p.payload.n} trades`], labelFormatter: l => `${l}:00 UTC` }),
+                    React.createElement(Bar, { dataKey: "pnl", radius: [2, 2, 0, 0] }, hourStats.map((h, i) => (React.createElement(Cell, { key: i, fill: h.pnl >= 0 ? '#7fb069' : '#d96459', opacity: h.n === 0 ? 0.15 : 1 })))))))));
+}
+function DirBar({ label, count, winRate, color }) {
+    return (React.createElement("div", { style: styles.dirBar },
+        React.createElement("div", { style: styles.dirBarHeader },
+            React.createElement("span", { style: styles.dirBarLabel }, label),
+            React.createElement("span", { style: styles.dirBarCount }, count)),
+        React.createElement("div", { style: styles.dirBarTrack },
+            React.createElement("div", { style: { ...styles.dirBarFill, width: `${winRate}%`, background: color } })),
+        React.createElement("div", { style: styles.dirBarFooter },
+            React.createElement("span", { style: styles.dirBarSub }, "win rate"),
+            React.createElement("span", { style: { ...styles.dirBarPct, color } },
+                winRate.toFixed(1),
+                "%"))));
+}
+function TradesTable({ trades, sortKey, sortDir, setSort }) {
+    const SortHeader = ({ k, children, align = 'left' }) => (React.createElement("th", { style: { ...styles.th, textAlign: align, cursor: 'pointer' }, onClick: () => setSort(k) },
+        React.createElement("span", { style: { display: 'inline-flex', alignItems: 'center', gap: 4 } },
+            children,
+            sortKey === k && (sortDir === 'asc' ? React.createElement(ChevronUp, null) : React.createElement(ChevronDown, null)))));
+    return (React.createElement("div", { style: styles.content },
+        React.createElement("div", { style: styles.tableWrap },
+            React.createElement("table", { style: styles.table },
+                React.createElement("thead", null,
+                    React.createElement("tr", null,
+                        React.createElement(SortHeader, { k: "exitTime" }, "Closed"),
+                        React.createElement(SortHeader, { k: "symbol" }, "Symbol"),
+                        React.createElement(SortHeader, { k: "direction" }, "Side"),
+                        React.createElement(SortHeader, { k: "qty", align: "right" }, "Qty"),
+                        React.createElement(SortHeader, { k: "entryPrice", align: "right" }, "Entry"),
+                        React.createElement(SortHeader, { k: "exitPrice", align: "right" }, "Exit"),
+                        React.createElement(SortHeader, { k: "pnlPctNet", align: "right" }, "%"),
+                        React.createElement(SortHeader, { k: "pnl", align: "right" }, "Gross"),
+                        React.createElement(SortHeader, { k: "fees", align: "right" }, "Fees"),
+                        React.createElement(SortHeader, { k: "pnlNet", align: "right" }, "Net"))),
+                React.createElement("tbody", null, trades.map(t => (React.createElement("tr", { key: t.id, style: styles.tr },
+                    React.createElement("td", { style: styles.td }, formatDate(t.exitTime)),
+                    React.createElement("td", { style: { ...styles.td, color: '#e8e6df' } }, t.symbol),
+                    React.createElement("td", { style: styles.td },
+                        React.createElement("span", { style: {
+                                ...styles.tag,
+                                background: t.direction === 'long' ? 'rgba(127,176,105,0.12)' : 'rgba(217,100,89,0.12)',
+                                color: t.direction === 'long' ? '#7fb069' : '#d96459',
+                            } }, t.direction)),
+                    React.createElement("td", { style: { ...styles.td, textAlign: 'right' } }, t.qty),
+                    React.createElement("td", { style: { ...styles.td, textAlign: 'right' } },
+                        "$",
+                        t.entryPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })),
+                    React.createElement("td", { style: { ...styles.td, textAlign: 'right' } },
+                        "$",
+                        t.exitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })),
+                    React.createElement("td", { style: { ...styles.td, textAlign: 'right', color: t.pnlNet >= 0 ? '#7fb069' : '#d96459' } }, formatPct(t.pnlPctNet)),
+                    React.createElement("td", { style: { ...styles.td, textAlign: 'right', color: t.pnl >= 0 ? '#8a8575' : '#9a6560' } }, formatMoney(t.pnl)),
+                    React.createElement("td", { style: { ...styles.td, textAlign: 'right', color: '#c9a96b' } },
+                        "\u2212",
+                        formatMoney(t.fees).replace('-', '')),
+                    React.createElement("td", { style: { ...styles.td, textAlign: 'right', color: t.pnlNet >= 0 ? '#7fb069' : '#d96459', fontWeight: 600 } }, formatMoney(t.pnlNet))))))))));
+}
+function Settings({ settings, onChange }) {
+    return (React.createElement("div", { style: styles.content },
+        React.createElement("div", { style: styles.chartCard },
+            React.createElement("div", { style: styles.chartTitle }, "Account settings"),
+            React.createElement("div", { style: styles.chartSub }, "These affect equity curve, percentages, and net P&L"),
+            React.createElement("div", { style: styles.settingsGrid },
+                React.createElement("label", { style: styles.label },
+                    "Starting balance ($)",
+                    React.createElement("input", { type: "number", value: settings.startingBalance, onChange: e => onChange({ ...settings, startingBalance: parseFloat(e.target.value) || 0 }), style: styles.input })),
+                React.createElement("label", { style: styles.label },
+                    "Risk per trade ($)",
+                    React.createElement("input", { type: "number", value: settings.riskPerTrade, onChange: e => onChange({ ...settings, riskPerTrade: parseFloat(e.target.value) || 0 }), style: styles.input })),
+                React.createElement("label", { style: styles.label },
+                    "Fee per leg (%)",
+                    React.createElement("input", { type: "number", step: "0.01", min: "0", value: settings.feeRate, onChange: e => onChange({ ...settings, feeRate: parseFloat(e.target.value) || 0 }), style: styles.input }))),
+            React.createElement("div", { style: { ...styles.helpText, marginTop: 16 } },
+                "Fee per leg is charged on the notional value of each entry and each exit. A round-trip therefore costs roughly ",
+                (settings.feeRate * 2).toFixed(2),
+                "% of position size. Breakout charges 0.04% per leg by default."))));
+}
+const styles = {
+    app: {
+        minHeight: '100vh',
+        background: 'radial-gradient(ellipse at top, #15130f 0%, #0a0908 100%)',
+        color: '#a8a399',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: 13,
+        padding: '20px 20px 80px',
+        maxWidth: 1400,
+        margin: '0 auto',
+    },
+    header: {
+        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
+        paddingBottom: 20, borderBottom: '1px solid #1f1d18', marginBottom: 20,
+        gap: 12, flexWrap: 'wrap',
+    },
+    brand: { display: 'flex', alignItems: 'center', gap: 14 },
+    brandMark: { fontSize: 28, color: '#c9a96b', letterSpacing: -2, fontFamily: 'JetBrains Mono, monospace' },
+    brandTitle: { fontFamily: 'Fraunces, serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', color: '#e8e6df', lineHeight: 1 },
+    brandSub: { fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a564c', marginTop: 6 },
+    headerActions: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
+    feeChip: {
+        display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px 6px 12px',
+        background: 'rgba(201,169,107,0.06)', border: '1px solid rgba(201,169,107,0.25)', borderRadius: 2,
+    },
+    feeChipLabel: { fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#c9a96b', fontWeight: 600 },
+    feeChipInput: { background: 'transparent', border: 'none', color: '#e8e6df', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 600, width: 48, padding: 0, textAlign: 'right', outline: 'none' },
+    feeChipUnit: { color: '#8a857a', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' },
+    btnGhost: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: 'transparent', border: '1px solid #2a2823', color: '#c9c5b9', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 2, letterSpacing: '0.04em' },
+    btnPrimary: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '12px 20px', background: '#c9a96b', border: '1px solid #c9a96b', color: '#0a0908', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 2, letterSpacing: '0.06em', textTransform: 'uppercase' },
+    btnDanger: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: 'transparent', border: '1px solid #3a2a28', color: '#9a6560', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 2 },
+    banner: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', fontSize: 12, marginBottom: 16, borderRadius: 2, position: 'relative' },
+    bannerOk: { background: 'rgba(127,176,105,0.08)', border: '1px solid rgba(127,176,105,0.25)', color: '#9bc785' },
+    bannerErr: { background: 'rgba(217,100,89,0.08)', border: '1px solid rgba(217,100,89,0.25)', color: '#e08278' },
+    bannerClose: { marginLeft: 'auto', background: 'transparent', border: 'none', color: 'inherit', fontSize: 18, cursor: 'pointer', padding: 0, lineHeight: 1 },
+    controls: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, gap: 16, flexWrap: 'wrap' },
+    tabs: { display: 'flex', gap: 0, borderBottom: '1px solid #1f1d18' },
+    tab: { background: 'transparent', border: 'none', borderBottom: '2px solid transparent', color: '#5a564c', padding: '10px 18px', fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 500 },
+    tabActive: { color: '#e8e6df', borderBottom: '2px solid #c9a96b' },
+    filters: { display: 'flex', gap: 8 },
+    select: { background: '#15130f', border: '1px solid #2a2823', color: '#c9c5b9', padding: '7px 10px', fontSize: 11, fontFamily: 'inherit', borderRadius: 2, letterSpacing: '0.04em', cursor: 'pointer' },
+    content: { display: 'flex', flexDirection: 'column', gap: 16 },
+    statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 1, background: '#1f1d18', border: '1px solid #1f1d18' },
+    statCard: { background: '#15130f', padding: '18px 20px' },
+    statLabel: { fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a564c', marginBottom: 10, fontWeight: 500 },
+    statValue: { fontSize: 22, fontWeight: 500, lineHeight: 1.1, letterSpacing: '-0.01em' },
+    statSub: { fontSize: 10, color: '#6a665b', marginTop: 6, letterSpacing: '0.02em' },
+    chartCard: { background: '#15130f', border: '1px solid #1f1d18', padding: 20 },
+    feeImpactCard: { background: 'linear-gradient(180deg, rgba(201,169,107,0.04) 0%, #15130f 100%)', border: '1px solid rgba(201,169,107,0.2)', padding: 20 },
+    feeImpactHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, gap: 12, flexWrap: 'wrap' },
+    feeImpactBadge: { fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#c9a96b', background: 'rgba(201,169,107,0.1)', border: '1px solid rgba(201,169,107,0.3)', padding: '6px 12px', borderRadius: 2, fontWeight: 600, fontFamily: 'JetBrains Mono, monospace' },
+    feeImpactGrid: { display: 'flex', alignItems: 'center', gap: 16, padding: '12px 0', borderTop: '1px solid #1f1d18', borderBottom: '1px solid #1f1d18', flexWrap: 'wrap' },
+    feeImpactCol: { flex: 1, minWidth: 80 },
+    feeImpactLabel: { fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#5a564c', marginBottom: 8, fontWeight: 500 },
+    feeImpactValue: { fontFamily: 'JetBrains Mono, monospace', fontSize: 22, fontWeight: 500, letterSpacing: '-0.01em' },
+    feeImpactArrow: { fontFamily: 'JetBrains Mono, monospace', color: '#3a372f', fontSize: 18 },
+    feeImpactFoot: { marginTop: 14, fontSize: 11, color: '#6a665b', lineHeight: 1.6 },
+    feeImpactMono: { fontFamily: 'JetBrains Mono, monospace', color: '#a8a399' },
+    chartHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+    chartTitle: { fontFamily: 'Fraunces, serif', fontSize: 17, fontWeight: 600, color: '#e8e6df', letterSpacing: '-0.01em' },
+    chartSub: { fontSize: 11, color: '#6a665b', marginTop: 4, marginBottom: 8 },
+    twoCol: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 },
+    dirBars: { display: 'flex', flexDirection: 'column', gap: 20, marginTop: 16 },
+    dirBar: {},
+    dirBarHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: 8 },
+    dirBarLabel: { fontSize: 10, letterSpacing: '0.16em', color: '#8a857a', fontWeight: 600 },
+    dirBarCount: { fontFamily: 'JetBrains Mono, monospace', fontSize: 14, color: '#e8e6df' },
+    dirBarTrack: { height: 6, background: '#1f1d18', borderRadius: 1, overflow: 'hidden' },
+    dirBarFill: { height: '100%', transition: 'width 400ms ease' },
+    dirBarFooter: { display: 'flex', justifyContent: 'space-between', marginTop: 6 },
+    dirBarSub: { fontSize: 10, color: '#5a564c', letterSpacing: '0.04em' },
+    dirBarPct: { fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 600 },
+    streaks: { display: 'flex', gap: 24, marginTop: 16 },
+    streakItem: { flex: 1 },
+    streakLabel: { fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#5a564c', marginBottom: 8 },
+    streakValue: { fontFamily: 'JetBrains Mono, monospace', fontSize: 32, fontWeight: 500 },
+    tableWrap: { overflowX: 'auto', background: '#15130f', border: '1px solid #1f1d18' },
+    table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
+    th: { padding: '12px 16px', borderBottom: '1px solid #1f1d18', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#5a564c', fontWeight: 600, fontFamily: 'inherit', background: '#100f0d' },
+    tr: { borderBottom: '1px solid #1a1815' },
+    td: { padding: '11px 16px', color: '#a8a399', fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5 },
+    tag: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 1, fontWeight: 600, fontFamily: 'Inter, sans-serif' },
+    empty: { background: '#15130f', border: '1px solid #1f1d18', padding: '60px 40px', textAlign: 'center', maxWidth: 640, margin: '40px auto' },
+    emptyMark: { fontSize: 40, color: '#c9a96b', marginBottom: 16, fontFamily: 'JetBrains Mono, monospace' },
+    emptyTitle: { fontFamily: 'Fraunces, serif', fontSize: 28, color: '#e8e6df', margin: '0 0 12px', fontWeight: 600 },
+    emptyText: { fontSize: 13, color: '#8a857a', maxWidth: 380, margin: '0 auto 32px', lineHeight: 1.6 },
+    emptySteps: { textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 },
+    step: { display: 'flex', gap: 14, alignItems: 'flex-start', fontSize: 12, color: '#8a857a', lineHeight: 1.5 },
+    stepNum: { fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#c9a96b', letterSpacing: '0.1em', minWidth: 24, paddingTop: 2 },
+    emptySettings: { marginTop: 28, paddingTop: 24, borderTop: '1px solid #1f1d18' },
+    label: { display: 'flex', flexDirection: 'column', gap: 8, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8a857a', fontWeight: 500 },
+    input: { background: '#0f0e0c', border: '1px solid #2a2823', color: '#e8e6df', padding: '10px 12px', fontSize: 13, fontFamily: 'JetBrains Mono, monospace', borderRadius: 2, outline: 'none' },
+    settingsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginTop: 12 },
+    helpText: { fontSize: 12, color: '#8a857a', lineHeight: 1.7 },
+    footer: { marginTop: 40, paddingTop: 16, borderTop: '1px solid #1f1d18', fontSize: 10, color: '#5a564c', letterSpacing: '0.1em', textTransform: 'uppercase', textAlign: 'center' },
+};
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(TradingJournal, null));
+
+};
+</script>
+</body>
+</html>
