@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNiIgZmlsbD0iIzBkMWIyYSIvPjxwb2x5bGluZSBwb2ludHM9IjQsMjQgMTAsMTQgMTYsMTggMjIsOCAyOCwxMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDBjMmE4IiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PGNpcmNsZSBjeD0iMjIiIGN5PSI4IiByPSIyLjUiIGZpbGw9IiMwMGMyYTgiLz48L3N2Zz4=">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: #0b1929; color: #c8d8e8; font-family: 'Inter', system-ui, sans-serif; font-size: 13px; }
@@ -162,7 +162,7 @@ const C = {
     sans: '"DM Sans", "Inter", system-ui, sans-serif',
 };
 // ─── Storage ──────────────────────────────────────────────────────────────────
-const SK = 'trades:v1', SS = 'settings:v1', SM = 'metadata:v1';
+const SK = 'trades:v1', SS = 'settings:v1', SM = 'metadata:v1', SB = 'balance:v1';
 const DEF = {
     startingBalance: 10000, riskPerTrade: 10, feeRate: 0.04,
     propAccountSize: 5000, propProfitTargetPct: 10, propDailyLossPct: 3,
@@ -213,7 +213,64 @@ function pairFills(fills) {
     }
     return trades.sort((a, b) => a.exitTime - b.exitTime);
 }
-// ─── Formatters ───────────────────────────────────────────────────────────────
+// ─── Balance history parser ────────────────────────────────────────────────────
+// TradingView paper-trading-balance-history CSV:
+//   Time, Balance Before, Balance After, Realized P&L (value), Realized P&L (currency), Action
+// The Action field contains unquoted commas so we parse positionally by column index.
+// We only keep rows where Action is an enter/close position or commission — nothing else.
+function isBalanceHistoryCSV(txt) {
+    const first = txt.trim().split(/\r?\n/)[0] || '';
+    const h = first.toLowerCase().replace(/[^a-z0-9,]/g, '');
+    return h.includes('balancebefore') && h.includes('balanceafter');
+}
+function parseDate(s) {
+    if (!s)
+        return NaN;
+    // Handle "2026-04-22 22:42:04" — replace space with T so all browsers parse it
+    return new Date(s.trim().replace(' ', 'T')).getTime();
+}
+function parseBalanceHistoryCSV(txt) {
+    const lines = txt.trim().split(/\r?\n/);
+    if (lines.length < 2)
+        return [];
+    const entries = [];
+    for (const line of lines.slice(1)) {
+        if (!line.trim())
+            continue;
+        // Columns: 0=Time, 1=Balance Before, 2=Balance After, 3=P&L value, 4=Currency, 5+=Action
+        const parts = line.split(',');
+        if (parts.length < 5)
+            continue;
+        // Action text starts at col 5 — join everything from there back into one string
+        const action = parts.slice(5).join(',').trim().toLowerCase();
+        // Only keep rows that are trade entries, exits, or their commissions
+        const isPosition = action.startsWith('close') || action.startsWith('enter');
+        const isCommission = action.startsWith('commission for: close') || action.startsWith('commission for: enter');
+        if (!isPosition && !isCommission)
+            continue;
+        const ts = parseDate(parts[0]);
+        const equity = parseFloat(parts[2].trim());
+        const pnl = parseFloat(parts[3].trim()) || 0;
+        if (!isNaN(ts) && isFinite(equity) && equity > 0) {
+            entries.push({ time: ts, balance: equity, equity, pnl });
+        }
+    }
+    return entries.sort((a, b) => a.time - b.time);
+}
+// For order history (standard CSV)
+function detectCSVType(rows) {
+    if (!rows.length)
+        return 'unknown';
+    const keys = Object.keys(rows[0]);
+    const hasSide = keys.some(k => k === 'side');
+    const hasSymbol = keys.some(k => k === 'symbol' || k === 'instrument');
+    const hasPrice = keys.some(k => k.includes('price') || k === 'fillprice');
+    if (hasSide && hasSymbol)
+        return 'orders';
+    if (hasPrice && hasSymbol)
+        return 'orders';
+    return 'unknown';
+}
 const f$ = (n, dp = 2) => { if (n == null || !isFinite(n))
     return '—'; const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }); return (n < 0 ? '-$' : '$') + s; };
 const fpct = (n, dp = 1) => { if (n == null || !isFinite(n))
@@ -236,6 +293,7 @@ function addFees(t, r) {
 // ─── Main App ─────────────────────────────────────────────────────────────────
 function App() {
     const [trades, setTrades] = useState([]);
+    const [balanceHistory, setBalanceHistory] = useState([]); // [{time,balance,equity}]
     const [meta, setMeta] = useState({});
     const [sett, setSett] = useState(DEF);
     const [tab, setTab] = useState('dashboard');
@@ -266,6 +324,12 @@ function App() {
                 setMeta(JSON.parse(m));
         }
         catch (_c) { }
+        try {
+            const b = localStorage.getItem(SB);
+            if (b)
+                setBalanceHistory(JSON.parse(b));
+        }
+        catch (_d) { }
     }, []);
     const saveT = n => { setTrades(n); try {
         localStorage.setItem(SK, JSON.stringify(n));
@@ -279,6 +343,10 @@ function App() {
         localStorage.setItem(SM, JSON.stringify(n));
     }
     catch (_a) { } };
+    const saveBal = n => { setBalanceHistory(n); try {
+        localStorage.setItem(SB, JSON.stringify(n));
+    }
+    catch (_a) { } };
     const upMeta = (id, p) => saveM({ ...meta, [id]: { ...(meta[id] || {}), ...p } });
     const handleFile = async (e) => {
         var _a;
@@ -287,24 +355,83 @@ function App() {
             return;
         const txt = await file.text();
         try {
-            const nt = pairFills(parseCSV(txt).map(normFill));
-            if (!nt.length) {
-                setMsg({ t: 'err', s: 'No valid trades found — use TradingView Order History export.' });
+            // Check for balance history BEFORE parsing as CSV, because the Action
+            // field contains unquoted commas that break standard CSV column mapping.
+            if (isBalanceHistoryCSV(txt)) {
+                const entries = parseBalanceHistoryCSV(txt);
+                if (!entries.length) {
+                    setMsg({ t: 'err', s: 'No valid balance entries found. Check this is a TradingView Balance History export.' });
+                    e.target.value = '';
+                    return;
+                }
+                saveBal(entries);
+                setMsg({ t: 'ok', s: `Imported balance history: ${entries.length} entries. Equity curve now uses real account balance.` });
+                e.target.value = '';
                 return;
             }
-            const m = new Map(trades.map(t => [t.id, t]));
-            nt.forEach(t => m.set(t.id, t));
-            saveT(Array.from(m.values()).sort((a, b) => a.exitTime - b.exitTime));
-            setMsg({ t: 'ok', s: `Imported ${nt.length} trade${nt.length === 1 ? '' : 's'}.` });
+            // Fall through to order history parsing
+            const rows = parseCSV(txt);
+            if (!rows.length) {
+                setMsg({ t: 'err', s: 'Empty or unreadable CSV file.' });
+                e.target.value = '';
+                return;
+            }
+            const type = detectCSVType(rows);
+            if (type === 'orders') {
+                const nt = pairFills(rows.map(normFill));
+                if (!nt.length) {
+                    setMsg({ t: 'err', s: 'No valid trades found — use TradingView Order History export.' });
+                    e.target.value = '';
+                    return;
+                }
+                const m = new Map(trades.map(t => [t.id, t]));
+                nt.forEach(t => m.set(t.id, t));
+                saveT(Array.from(m.values()).sort((a, b) => a.exitTime - b.exitTime));
+                setMsg({ t: 'ok', s: `Imported order history: ${nt.length} trade${nt.length === 1 ? '' : 's'}.` });
+            }
+            else {
+                setMsg({ t: 'err', s: 'Unrecognised CSV format. Import either Order History or Balance History from TradingView.' });
+            }
         }
-        catch (e) {
-            setMsg({ t: 'err', s: 'Parse error: ' + e.message });
+        catch (err) {
+            setMsg({ t: 'err', s: 'Parse error: ' + err.message });
         }
         e.target.value = '';
     };
-    const clearAll = () => { if (!confirm('Delete all trades and notes?'))
-        return; saveT([]); saveM({}); setMsg(null); };
-    const doExport = () => { const b = new Blob([JSON.stringify({ trades, meta, sett }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `mtj-${new Date().toISOString().slice(0, 10)}.json`; a.click(); };
+    const clearAll = () => { if (!confirm('Delete all trades, notes and balance history?'))
+        return; saveT([]); saveM({}); saveBal([]); setMsg(null); };
+    const doExport = () => { const b = new Blob([JSON.stringify({ trades, meta, sett, balanceHistory }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `mtj-${new Date().toISOString().slice(0, 10)}.json`; a.click(); };
+    // When balance history is available, build a real equity curve from it.
+    // This overrides the reconstructed curve from order pairings.
+    const balanceCurve = useMemo(() => {
+        if (!balanceHistory.length)
+            return null;
+        return balanceHistory.map((e, i) => ({ idx: i, equity: e.equity, gross: e.equity, time: e.time }));
+    }, [balanceHistory]);
+    // Daily equity from balance history: last balance reading per UTC day
+    const balanceDailyMap = useMemo(() => {
+        if (!balanceHistory.length)
+            return null;
+        const m = {};
+        for (const e of balanceHistory) {
+            const d = isoDay(e.time);
+            m[d] = e.equity;
+        }
+        return m; // day -> final equity that day
+    }, [balanceHistory]);
+    // Daily P&L from balance: equity(day) - equity(prev day)
+    const balanceDailyPnl = useMemo(() => {
+        if (!balanceDailyMap)
+            return null;
+        const days = Object.keys(balanceDailyMap).sort();
+        const result = {};
+        for (let i = 1; i < days.length; i++) {
+            const prev = balanceDailyMap[days[i - 1]];
+            const curr = balanceDailyMap[days[i]];
+            result[days[i]] = curr - prev;
+        }
+        return result;
+    }, [balanceDailyMap]);
     const enriched = useMemo(() => trades.map(t => { const m = meta[t.id] || {}; return { ...addFees(t, sett.feeRate), note: m.note || '', setupTags: m.setupTags || [], execTags: m.execTags || [], rating: m.rating || 0 }; }), [trades, meta, sett.feeRate]);
     const filtered = useMemo(() => enriched.filter(t => (fSym === 'all' || t.symbol === fSym) && (fDir === 'all' || t.direction === fDir) && (fSetup === 'all' || t.setupTags.includes(fSetup))), [enriched, fSym, fDir, fSetup]);
     const symbols = useMemo(() => Array.from(new Set(trades.map(t => t.symbol))), [trades]);
@@ -349,6 +476,42 @@ function App() {
         const dailyArr = Object.entries(dailyBars).sort(([a], [b]) => a.localeCompare(b)).map(([d, pnl]) => ({ d: d.slice(5), pnl }));
         return { n, wins: wins.length, losses: losses.length, longs: longs.length, shorts: shorts.length, longsWR: longs.length ? longs.filter(t => t.pnlNet > 0).length / longs.length * 100 : 0, shortsWR: shorts.length ? shorts.filter(t => t.pnlNet > 0).length / shorts.length * 100 : 0, netPnl, grossPnl, totalFees, avgFee: totalFees / n, gW, gL, wr, avgW, avgL, pf, avgRR, expectancy: netPnl / n, curve, maxDD, peak, lW, lL, finalEq: eq, finalEqG: eqG, dailyArr };
     }, [filtered, sett.startingBalance]);
+    // Patch stats with real balance history data when available.
+    // Win rate, R:R, setup tags etc. still come from order history.
+    // Only the equity curve, net P&L, daily bars are overridden.
+    const statsWithBalance = useMemo(() => {
+        if (!stats)
+            return null;
+        if (!balanceCurve || !balanceCurve.length)
+            return stats;
+        const lastEntry = balanceCurve[balanceCurve.length - 1];
+        const firstEntry = balanceCurve[0];
+        const realNetPnl = lastEntry.equity - firstEntry.equity;
+        const realFinalEq = lastEntry.equity;
+        // Rebuild daily bars from balance daily P&L
+        const realDailyArr = balanceDailyPnl
+            ? Object.entries(balanceDailyPnl).sort(([a], [b]) => a.localeCompare(b)).map(([d, pnl]) => ({ d: d.slice(5), pnl }))
+            : stats.dailyArr;
+        // Recalculate max drawdown from the balance curve
+        let peak2 = firstEntry.equity, maxDD2 = 0;
+        for (const p of balanceCurve) {
+            peak2 = Math.max(peak2, p.equity);
+            const dd = peak2 - p.equity;
+            if (dd > maxDD2)
+                maxDD2 = dd;
+        }
+        return {
+            ...stats,
+            curve: balanceCurve,
+            netPnl: realNetPnl,
+            finalEq: realFinalEq,
+            finalEqG: realFinalEq,
+            peak: peak2,
+            maxDD: maxDD2,
+            dailyArr: realDailyArr,
+            usingBalanceHistory: true,
+        };
+    }, [stats, balanceCurve, balanceDailyPnl]);
     const dailyPnl = useMemo(() => { const m = {}; for (const t of filtered) {
         const d = isoDay(t.exitTime);
         m[d] = (m[d] || 0) + t.pnlNet;
@@ -457,19 +620,25 @@ function App() {
                 React.createElement("div", { style: { display: 'flex', gap: 8 } },
                     React.createElement("button", { onClick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, style: btnStyle },
                         React.createElement(IconImport, { size: 13 }),
-                        " Import trades"),
+                        " Import"),
                     React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: 'none' } }),
+                    balanceHistory.length > 0 && (React.createElement("div", { style: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: 'rgba(91,141,238,0.12)', border: '1px solid rgba(91,141,238,0.35)', borderRadius: 5, fontSize: 10, color: '#7aabff', fontWeight: 600, letterSpacing: '0.06em' } },
+                        "\u2B21 BALANCE ",
+                        balanceHistory.length,
+                        " pts",
+                        React.createElement("button", { onClick: () => { if (confirm('Remove balance history? Equity curve will revert to order-based reconstruction.'))
+                                saveBal([]); }, style: { background: 'none', border: 'none', color: '#7aabff', cursor: 'pointer', padding: '0 0 0 2px', fontSize: 13, lineHeight: 1, opacity: 0.6 } }, "\u00D7"))),
                     React.createElement("button", { onClick: doExport, disabled: !trades.length, style: btnStyle },
                         React.createElement(IconExport, { size: 13 }),
                         " Export"),
-                    React.createElement("button", { onClick: clearAll, disabled: !trades.length, style: { ...btnStyle, color: '#c06060', borderColor: 'rgba(224,82,82,0.3)' } },
+                    React.createElement("button", { onClick: clearAll, disabled: !trades.length && !balanceHistory.length, style: { ...btnStyle, color: '#c06060', borderColor: 'rgba(224,82,82,0.3)' } },
                         React.createElement(IconTrash, { size: 13 })))),
             msg && React.createElement("div", { style: { padding: '8px 20px', fontSize: 12, background: msg.t === 'ok' ? 'rgba(76,175,125,0.1)' : 'rgba(224,82,82,0.1)', borderBottom: `1px solid ${msg.t === 'ok' ? C.greenBd : C.redBd}`, color: msg.t === 'ok' ? C.green : C.red, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 } },
                 msg.s,
                 React.createElement("button", { onClick: () => setMsg(null), style: { marginLeft: 'auto', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, lineHeight: 1 } }, "\u00D7")),
             React.createElement("div", { style: { flex: 1, overflowY: 'auto', overflowX: 'hidden' } }, !trades.length ? React.createElement(EmptyState, { onPick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, sett: sett, setSett: saveS }) : (React.createElement(React.Fragment, null,
-                tab === 'dashboard' && stats && React.createElement(Dashboard, { stats: stats, sett: sett, dailyPnl: dailyPnl, dailyCount: dailyCount, recentTrades: sortedTrades.slice(0, 10), onEdit: setEditing }),
-                tab === 'analytics' && stats && React.createElement(Analytics, { stats: stats, sessionStats: sessionStats, hourStats: hourStats, setupStats: setupStats, execStats: execStats, weeklyStats: weeklyStats }),
+                tab === 'dashboard' && statsWithBalance && React.createElement(Dashboard, { stats: statsWithBalance, sett: sett, dailyPnl: balanceDailyPnl || dailyPnl, dailyCount: dailyCount, recentTrades: sortedTrades.slice(0, 10), onEdit: setEditing }),
+                tab === 'analytics' && statsWithBalance && React.createElement(Analytics, { stats: statsWithBalance, sessionStats: sessionStats, hourStats: hourStats, setupStats: setupStats, execStats: execStats, weeklyStats: weeklyStats }),
                 tab === 'calendar' && React.createElement(CalendarTab, { dailyPnl: dailyPnl, dailyCount: dailyCount, trades: filtered }),
                 tab === 'trades' && React.createElement(TradesTab, { trades: sortedTrades, sk: sk, sd: sd, doSort: doSort, onEdit: setEditing }),
                 tab === 'propfirm' && propStats && React.createElement(PropFirmTab, { ps: propStats, sett: sett, setSett: saveS, trades: filtered }),
@@ -487,7 +656,7 @@ function EmptyState({ onPick, sett, setSett }) {
                     React.createElement("circle", { cx: "15", cy: "5", r: "1.5", fill: "white" }))),
             React.createElement("h2", { style: { fontWeight: 700, fontSize: 22, color: C.text, marginBottom: 8 } }, "My Trade Journal"),
             React.createElement("p", { style: { fontSize: 13, color: C.textDim, lineHeight: 1.7, marginBottom: 28 } }, "Import your TradingView paper trading order history to get started."),
-            React.createElement("div", { style: { textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28, background: C.main, borderRadius: 8, padding: '14px 18px' } }, ['Open Trading Panel → click account name', 'Export data… → select History → Export', 'Import the CSV here'].map((s, i) => (React.createElement("div", { key: i, style: { display: 'flex', gap: 12, fontSize: 12, color: C.textDim, lineHeight: 1.5, alignItems: 'flex-start' } },
+            React.createElement("div", { style: { textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28, background: C.main, borderRadius: 8, padding: '14px 18px' } }, ['Open Trading Panel → click account name', 'Export data… → select Order History → Export', 'Optionally also export Balance History for a more accurate equity curve', 'Import each CSV here — the app detects the type automatically'].map((s, i) => (React.createElement("div", { key: i, style: { display: 'flex', gap: 12, fontSize: 12, color: C.textDim, lineHeight: 1.5, alignItems: 'flex-start' } },
                 React.createElement("span", { style: { background: C.blue, color: 'white', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0, marginTop: 1 } }, i + 1),
                 s)))),
             React.createElement("button", { onClick: onPick, style: { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px', background: C.blue, border: 'none', color: 'white', fontSize: 13, fontWeight: 600, fontFamily: C.sans, cursor: 'pointer', borderRadius: 7, marginBottom: 20 } },
