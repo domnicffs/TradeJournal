@@ -3,306 +3,225 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="theme-color" content="#0a0908" />
-<title>Ledger · Trading Journal</title>
+<meta name="theme-color" content="#0d1b2a" />
+<title>My Trade Journal</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNiIgZmlsbD0iIzBkMWIyYSIvPjxwb2x5bGluZSBwb2ludHM9IjQsMjQgMTAsMTQgMTYsMTggMjIsOCAyOCwxMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDBjMmE4IiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PGNpcmNsZSBjeD0iMjIiIGN5PSI4IiByPSIyLjUiIGZpbGw9IiMwMGMyYTgiLz48L3N2Zz4=">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNiIgZmlsbD0iIzBkMWIyYSIvPjxwb2x5bGluZSBwb2ludHM9IjQsMjQgMTAsMTQgMTYsMTggMjIsOCAyOCwxMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDBjMmE4IiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PGNpcmNsZSBjeD0iMjIiIGN5PSI4IiByPSIyLjUiIGZpbGw9IiMwMGMyYTgiLz48L3N2Zz4=">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: #0a0908; }
-  ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-track { background: #0f0e0c; }
-  ::-webkit-scrollbar-thumb { background: #2a2823; border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: #3a372f; }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
-  #loading {
-    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-    color: #c9a96b; font-family: 'JetBrains Mono', monospace; font-size: 14px;
-    letter-spacing: 0.2em;
-    flex-direction: column; gap: 16px; padding: 40px; text-align: center;
-  }
-  #loading .err {
-    color: #d96459; max-width: 500px; line-height: 1.6;
-    font-family: 'Inter', sans-serif; letter-spacing: normal; font-size: 13px;
-  }
-  #loading .hint { color: #6a665b; font-size: 11px; max-width: 500px; line-height: 1.6;
-    font-family: 'Inter', sans-serif; letter-spacing: normal; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #0b1929; color: #c8d8e8; font-family: 'Inter', system-ui, sans-serif; font-size: 13px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0d1f30; }
+::-webkit-scrollbar-thumb { background: #1e3a4a; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #2a5068; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
+select { appearance: none; -webkit-appearance: none; }
+#root { height: 100%; }
+#loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; color: #00c2a8; font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.2em; background: #0b1929; }
+.spin { width: 32px; height: 32px; border: 2px solid #1e3a4a; border-top-color: #00c2a8; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
-<div id="root"><div id="loading"><div>LOADING…</div></div></div>
-
+<div id="root"><div id="loading"><div class="spin"></div><div>LOADING</div></div></div>
 <script>
-// Robust loader: try multiple CDNs in sequence for each library
+// App code runs AFTER all libraries are confirmed loaded
 (function() {
-  const root = document.getElementById('root');
-  const loading = document.getElementById('loading');
-
-  function showError(msg, hint) {
-    loading.innerHTML =
-      '<div class="err">⚠ ' + msg + '</div>' +
-      (hint ? '<div class="hint">' + hint + '</div>' : '');
+  function showError(msg) {
+    document.getElementById('root').innerHTML =
+      '<div id="loading"><div style="color:#e05c5c;max-width:480px;text-align:center;line-height:1.8;font-family:Inter,sans-serif;letter-spacing:normal;font-size:13px">'
+      + '⚠ ' + msg + '</div></div>';
   }
 
-  // Order matters: each library must load AFTER its dependencies.
-  // PropTypes is required by Recharts 2.x (it's a peer dep, not bundled).
-  const libs = [
-    {
-      name: 'React',
-      check: () => typeof React !== 'undefined',
-      urls: [
-        'https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js',
-        'https://unpkg.com/react@18.3.1/umd/react.production.min.js',
-        'https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js'
-      ]
-    },
-    {
-      name: 'ReactDOM',
-      check: () => typeof ReactDOM !== 'undefined',
-      urls: [
-        'https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js',
-        'https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js',
-        'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js'
-      ]
-    },
-    {
-      name: 'PropTypes',
-      check: () => typeof PropTypes !== 'undefined',
-      urls: [
-        'https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js',
-        'https://unpkg.com/prop-types@15.8.1/prop-types.min.js',
-        'https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js'
-      ]
-    },
-    {
-      name: 'Recharts',
-      check: () => typeof Recharts !== 'undefined',
-      urls: [
-        'https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js',
-        'https://unpkg.com/recharts@2.12.7/umd/Recharts.min.js',
-        'https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.js',
-        'https://unpkg.com/recharts@2.12.7/umd/Recharts.js'
-      ]
-    }
+  var libs = [
+    { name: 'React',     check: function(){ return typeof React !== 'undefined'; },     urls: ['https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js',     'https://unpkg.com/react@18.3.1/umd/react.production.min.js',     'https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js'] },
+    { name: 'ReactDOM',  check: function(){ return typeof ReactDOM !== 'undefined'; },  urls: ['https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js','https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js'] },
+    { name: 'PropTypes', check: function(){ return typeof PropTypes !== 'undefined'; }, urls: ['https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js',            'https://unpkg.com/prop-types@15.8.1/prop-types.min.js',            'https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js'] },
+    { name: 'Recharts',  check: function(){ return typeof Recharts !== 'undefined'; },  urls: ['https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js',           'https://unpkg.com/recharts@2.12.7/umd/Recharts.min.js',           'https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.js'] }
   ];
 
-  // Sequential loader: only try the next URL after the current one fails.
-  // Crucially we wait for onload before checking, and use onerror to skip.
-  function loadFromUrls(lib, urlIdx) {
-    return new Promise((resolve, reject) => {
-      if (lib.check()) return resolve();
-      if (urlIdx >= lib.urls.length) {
-        return reject(new Error('All CDNs failed for ' + lib.name));
-      }
-      const s = document.createElement('script');
-      s.src = lib.urls[urlIdx];
-      s.crossOrigin = 'anonymous';
-      let done = false;
-      const finish = (success) => {
-        if (done) return; done = true;
-        if (success && lib.check()) resolve();
-        else loadFromUrls(lib, urlIdx + 1).then(resolve, reject);
-      };
-      s.onload = () => finish(true);
-      s.onerror = () => finish(false);
-      // Safety timeout in case script hangs
-      setTimeout(() => finish(false), 10000);
-      document.head.appendChild(s);
+  function loadLib(lib, idx, cb) {
+    if (lib.check()) return cb(null);
+    if (idx >= lib.urls.length) return cb(new Error('All CDNs failed for ' + lib.name));
+    var s = document.createElement('script');
+    s.src = lib.urls[idx];
+    s.crossOrigin = 'anonymous';
+    var done = false;
+    function finish(ok) {
+      if (done) return; done = true;
+      if (ok && lib.check()) cb(null);
+      else loadLib(lib, idx + 1, cb);
+    }
+    s.onload = function() { finish(true); };
+    s.onerror = function() { finish(false); };
+    setTimeout(function() { finish(false); }, 12000);
+    document.head.appendChild(s);
+  }
+
+  function loadAll(idx, cb) {
+    if (idx >= libs.length) return cb(null);
+    loadLib(libs[idx], 0, function(err) {
+      if (err) return cb(err);
+      loadAll(idx + 1, cb);
     });
   }
 
-  async function loadAll() {
+  loadAll(0, function(err) {
+    if (err) {
+      showError('Could not load required libraries. Disable ad blockers for this page and try again, or switch to a different browser.<br><br><small style="color:#4a7a9a">' + err.message + '</small>');
+      return;
+    }
+    // All libs loaded — run the inlined app code directly
     try {
-      // Load in strict order, one at a time, so each library
-      // is fully available before the next one starts.
-      for (const lib of libs) {
-        await loadFromUrls(lib, 0);
-      }
       runApp();
-    } catch (err) {
-      showError(
-        'Could not load required libraries. Usually caused by an ad blocker, browser extension, or restrictive network.',
-        'Try: disable ad blockers for this page, try a different browser, or try mobile data instead of WiFi. Failure: ' + err.message
-      );
-      console.error(err);
+    } catch(e) {
+      showError('App failed to start: ' + e.message + '<br><br><small style="color:#4a7a9a">Open browser console for details.</small>');
+      console.error(e);
     }
-  }
-
-  function runApp() {
-    try {
-      window.__startApp();
-    } catch (err) {
-      showError('App crashed on startup: ' + err.message, 'Open DevTools console for details.');
-      console.error(err);
-    }
-  }
-
-  loadAll();
+  });
 })();
 </script>
-
 <script>
-// The compiled app code is wrapped so it only runs AFTER all libs have loaded.
-window.__startApp = function() {
+// App code is in a named function so the loader above can call it
+// after libraries have finished loading.
+function runApp() {
 "use strict";
+// ─── Deps ─────────────────────────────────────────────────────────────────────
 const { useState, useEffect, useMemo, useRef } = React;
-const { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell } = Recharts;
+const { LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell, ComposedChart } = Recharts;
 // ─── Icons ────────────────────────────────────────────────────────────────────
-const Upload = (p) => React.createElement("svg", { width: p.size || 14, height: p.size || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+const Ico = ({ d, size = 14, stroke = "currentColor", fill = "none", sw = 2 }) => React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: fill, stroke: stroke, strokeWidth: sw, strokeLinecap: "round", strokeLinejoin: "round" },
+    React.createElement("path", { d: d }));
+const IcoUpload = p => React.createElement("svg", { width: p.s || 14, height: p.s || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
     React.createElement("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }),
     React.createElement("polyline", { points: "17 8 12 3 7 8" }),
     React.createElement("line", { x1: "12", y1: "3", x2: "12", y2: "15" }));
-const Download = (p) => React.createElement("svg", { width: p.size || 14, height: p.size || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+const IcoDownload = p => React.createElement("svg", { width: p.s || 14, height: p.s || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
     React.createElement("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }),
     React.createElement("polyline", { points: "7 10 12 15 17 10" }),
     React.createElement("line", { x1: "12", y1: "15", x2: "12", y2: "3" }));
-const Trash2 = (p) => React.createElement("svg", { width: p.size || 14, height: p.size || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+const IcoTrash = p => React.createElement("svg", { width: p.s || 14, height: p.s || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
     React.createElement("polyline", { points: "3 6 5 6 21 6" }),
-    React.createElement("path", { d: "M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" }),
-    React.createElement("path", { d: "M10 11v6M14 11v6" }));
-const AlertCircle = (p) => React.createElement("svg", { width: p.size || 14, height: p.size || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+    React.createElement("path", { d: "M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" }));
+const IcoX = p => React.createElement("svg", { width: p.s || 14, height: p.s || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+    React.createElement("line", { x1: "18", y1: "6", x2: "6", y2: "18" }),
+    React.createElement("line", { x1: "6", y1: "6", x2: "18", y2: "18" }));
+const IcoAlert = p => React.createElement("svg", { width: p.s || 14, height: p.s || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
     React.createElement("circle", { cx: "12", cy: "12", r: "10" }),
     React.createElement("line", { x1: "12", y1: "8", x2: "12", y2: "12" }),
     React.createElement("line", { x1: "12", y1: "16", x2: "12.01", y2: "16" }));
-const ChevronUp = (p) => React.createElement("svg", { width: p.size || 10, height: p.size || 10, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+const IcoUp = p => React.createElement("svg", { width: p.s || 10, height: p.s || 10, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
     React.createElement("polyline", { points: "18 15 12 9 6 15" }));
-const ChevronDown = (p) => React.createElement("svg", { width: p.size || 10, height: p.size || 10, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+const IcoDn = p => React.createElement("svg", { width: p.s || 10, height: p.s || 10, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
     React.createElement("polyline", { points: "6 9 12 15 18 9" }));
-const XIcon = (p) => React.createElement("svg", { width: p.size || 14, height: p.size || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
-    React.createElement("line", { x1: "18", y1: "6", x2: "6", y2: "18" }),
-    React.createElement("line", { x1: "6", y1: "6", x2: "18", y2: "18" }));
-// ─── Constants ────────────────────────────────────────────────────────────────
-const STORAGE_KEY = 'trades:v1';
-const SETTINGS_KEY = 'settings:v1';
-const METADATA_KEY = 'metadata:v1';
-const DEFAULT_SETTINGS = {
-    startingBalance: 10000,
-    riskPerTrade: 10,
-    feeRate: 0.04,
-    propAccountSize: 5000,
-    propProfitTargetPct: 10,
-    propDailyLossPct: 3,
-    propMaxDDPct: 6,
-    propProfitSplitPct: 90,
+const IcoEdit = p => React.createElement("svg", { width: p.s || 14, height: p.s || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+    React.createElement("path", { d: "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" }),
+    React.createElement("path", { d: "M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" }));
+const IcoSettings = p => React.createElement("svg", { width: p.s || 14, height: p.s || 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
+    React.createElement("circle", { cx: "12", cy: "12", r: "3" }),
+    React.createElement("path", { d: "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" }));
+// ─── Storage keys ─────────────────────────────────────────────────────────────
+const SK = 'trades:v1', SS = 'settings:v1', SM = 'metadata:v1';
+const DEF = {
+    startingBalance: 10000, riskPerTrade: 10, feeRate: 0.04,
+    propAccountSize: 5000, propProfitTargetPct: 10, propDailyLossPct: 3,
+    propMaxDDPct: 6, propProfitSplitPct: 90,
 };
-const SETUP_TAGS = ['OB', 'BOS', 'CHoCH', 'Breaker', 'LQ Grab', 'FVG', 'MSS', 'Other'];
-const EXEC_TAGS = ['FOMO Entry', 'Revenge Trade', 'Moved SL', 'Early Exit', 'Late Entry', 'Overlevered', 'No Confluence', 'Perfect Execution', 'Missed Entry', 'Hesitation'];
-// ─── CSV helpers ──────────────────────────────────────────────────────────────
-function parseCSV(text) {
-    const lines = text.trim().split(/\r?\n/);
+const SETUPS = ['OB', 'BOS', 'CHoCH', 'Breaker', 'LQ Grab', 'FVG', 'MSS', 'Other'];
+const EXECS = ['FOMO Entry', 'Revenge Trade', 'Moved SL', 'Early Exit', 'Late Entry', 'Overlevered', 'No Confluence', 'Perfect Execution', 'Missed Entry', 'Hesitation'];
+// ─── CSV ──────────────────────────────────────────────────────────────────────
+function parseCSV(txt) {
+    const lines = txt.trim().split(/\r?\n/);
     if (lines.length < 2)
         return [];
-    const splitRow = (row) => {
-        const out = [];
-        let cur = '', q = false;
-        for (let i = 0; i < row.length; i++) {
-            const c = row[i];
-            if (c === '"') {
-                q = !q;
-                continue;
-            }
-            if (c === ',' && !q) {
-                out.push(cur);
-                cur = '';
-                continue;
-            }
-            cur += c;
+    const split = row => { const o = []; let c = '', q = false; for (const ch of row) {
+        if (ch === '"') {
+            q = !q;
+            continue;
         }
-        out.push(cur);
-        return out.map(s => s.trim());
-    };
-    const headers = splitRow(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-    return lines.slice(1).map(l => {
-        const cells = splitRow(l);
-        const obj = {};
-        headers.forEach((h, i) => { var _a; return obj[h] = (_a = cells[i]) !== null && _a !== void 0 ? _a : ''; });
-        return obj;
-    });
+        if (ch === ',' && !q) {
+            o.push(c);
+            c = '';
+            continue;
+        }
+        c += ch;
+    } o.push(c); return o.map(s => s.trim()); };
+    const hdr = split(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    return lines.slice(1).map(l => { const o = {}; split(l).forEach((v, i) => { var _a; return o[(_a = hdr[i]) !== null && _a !== void 0 ? _a : `_${i}`] = v; }); return o; });
 }
-function normaliseFill(row) {
-    const sym = row.symbol || row.instrument || '';
-    const sideRaw = (row.side || row.action || row.type || '').toLowerCase();
-    const side = sideRaw.includes('sell') || sideRaw.includes('short') ? 'sell' : 'buy';
-    const qty = parseFloat(row.qty || row.quantity || row.size || row.filledqty || '0') || 0;
-    const price = parseFloat(row.fillprice || row.price || row.avgfillprice || row.executionprice || '0') || 0;
-    const timeStr = row.closingtime || row.fillingtime || row.placingtime || row.time || row.date || row.executiontime || '';
-    const status = (row.status || '').toLowerCase();
-    const time = timeStr ? new Date(timeStr).getTime() : NaN;
-    return { symbol: sym, side, qty, price, time, status };
+function normFill(r) {
+    const sym = r.symbol || r.instrument || '';
+    const side = (r.side || r.action || r.type || '').toLowerCase().includes('sell') ? 'sell' : 'buy';
+    const qty = parseFloat(r.qty || r.quantity || r.size || r.filledqty || '0') || 0;
+    const price = parseFloat(r.fillprice || r.price || r.avgfillprice || r.executionprice || '0') || 0;
+    const ts = r.closingtime || r.fillingtime || r.placingtime || r.time || r.date || r.executiontime || '';
+    const status = (r.status || '').toLowerCase();
+    return { sym, side, qty, price, time: ts ? new Date(ts).getTime() : NaN, status };
 }
 function pairFills(fills) {
-    const valid = fills
-        .filter(f => f.symbol && f.qty > 0 && f.price > 0 && !isNaN(f.time))
+    const valid = fills.filter(f => f.sym && f.qty > 0 && f.price > 0 && !isNaN(f.time))
         .filter(f => !f.status || f.status.includes('fill') || f.status === 'closed' || f.status === '')
         .sort((a, b) => a.time - b.time);
-    const trades = [];
-    const open = {};
+    const trades = [], open = {};
     for (const f of valid) {
-        open[f.symbol] = open[f.symbol] || [];
-        const lots = open[f.symbol];
-        let remaining = f.qty;
-        while (remaining > 0 && lots.length > 0 && lots[0].side !== f.side) {
-            const lot = lots[0];
-            const matchQty = Math.min(remaining, lot.qty);
-            const isLong = lot.side === 'buy';
-            const pnl = isLong ? (f.price - lot.price) * matchQty : (lot.price - f.price) * matchQty;
-            const rMult = (f.price - lot.price) / lot.price * (isLong ? 1 : -1);
-            trades.push({ id: `${f.symbol}-${lot.time}-${f.time}-${trades.length}`, symbol: f.symbol, direction: isLong ? 'long' : 'short', qty: matchQty, entryPrice: lot.price, exitPrice: f.price, entryTime: lot.time, exitTime: f.time, pnl, rMultiple: rMult, pnlPct: rMult * 100 });
-            lot.qty -= matchQty;
-            remaining -= matchQty;
-            if (lot.qty <= 0.0000001)
+        open[f.sym] = open[f.sym] || [];
+        const lots = open[f.sym];
+        let rem = f.qty;
+        while (rem > 0 && lots.length && lots[0].side !== f.side) {
+            const lot = lots[0], mq = Math.min(rem, lot.qty), long = lot.side === 'buy';
+            const pnl = long ? (f.price - lot.price) * mq : (lot.price - f.price) * mq;
+            const rm = (f.price - lot.price) / lot.price * (long ? 1 : -1);
+            trades.push({ id: `${f.sym}-${lot.time}-${f.time}-${trades.length}`, symbol: f.sym, direction: long ? 'long' : 'short', qty: mq, entryPrice: lot.price, exitPrice: f.price, entryTime: lot.time, exitTime: f.time, pnl, rMultiple: rm, pnlPct: rm * 100 });
+            lot.qty -= mq;
+            rem -= mq;
+            if (lot.qty <= 1e-8)
                 lots.shift();
         }
-        if (remaining > 0)
-            lots.push({ side: f.side, qty: remaining, price: f.price, time: f.time });
+        if (rem > 0)
+            lots.push({ side: f.side, qty: rem, price: f.price, time: f.time });
     }
     return trades.sort((a, b) => a.exitTime - b.exitTime);
 }
-// ─── Utility ──────────────────────────────────────────────────────────────────
-function fmt$(n, dp = 2) {
-    if (!isFinite(n))
-        return '—';
-    const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
-    return (n < 0 ? '-$' : '$') + s;
-}
-function fmtPct(n, dp = 2) { return `${n >= 0 ? '+' : ''}${n.toFixed(dp)}%`; }
-function fmtDate(ts) { return new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }); }
-function applyFees(t, r) {
+// ─── Utils ────────────────────────────────────────────────────────────────────
+const $$ = (n, dp = 2) => { if (!isFinite(n))
+    return '—'; const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }); return (n < 0 ? '-$' : '$') + s; };
+const pct = (n, dp = 2) => { if (n == null || !isFinite(n))
+    return '—'; return `${n >= 0 ? '+' : ''}${n.toFixed(dp)}%`; };
+const fdate = ts => new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+const fdateShort = ts => new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short' });
+function addFees(t, r) {
     const fee = (t.entryPrice + t.exitPrice) * t.qty * (r / 100);
-    const net = t.pnl - fee;
-    const fcp = t.entryPrice > 0 ? (fee / (t.entryPrice * t.qty)) * 100 : 0;
+    const net = t.pnl - fee, fcp = t.entryPrice > 0 ? fee / (t.entryPrice * t.qty) * 100 : 0;
     return { ...t, fees: fee, pnlNet: net, pnlPctNet: t.pnlPct - fcp, rMultipleNet: t.rMultiple - fcp / 100 };
 }
-function sessionOf(ts) {
-    const h = new Date(ts).getUTCHours();
-    if (h < 7)
-        return 'Asia';
-    if (h < 12)
-        return 'London';
-    if (h < 16)
-        return 'Overlap';
-    if (h < 21)
-        return 'NY';
-    return 'After-hours';
-}
-function isoDay(ts) { return new Date(ts).toISOString().slice(0, 10); }
-function isoWeek(ts) {
-    const d = new Date(ts);
-    const day = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - day);
-    const ys = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return `${d.getUTCFullYear()}-W${String(Math.ceil((((d - ys) / 86400000) + 1) / 7)).padStart(2, '0')}`;
-}
-// ─── Main App ─────────────────────────────────────────────────────────────────
-function TradingJournal() {
+const session = ts => { const h = new Date(ts).getUTCHours(); if (h < 7)
+    return 'Asia'; if (h < 12)
+    return 'London'; if (h < 16)
+    return 'Overlap'; if (h < 21)
+    return 'NY'; return 'After'; };
+const isoDay = ts => new Date(ts).toISOString().slice(0, 10);
+const isoWeek = ts => { const d = new Date(ts), day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day); const ys = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return `${d.getUTCFullYear()}-W${String(Math.ceil(((d - ys) / 86400000 + 1) / 7)).padStart(2, '0')}`; };
+// ─── Colours ──────────────────────────────────────────────────────────────────
+const C = {
+    bg: '#0b1929', sidebar: '#0d1f30', card: '#0f2336', cardB: '#162d42',
+    border: '#1a3550', border2: '#1e3f5a', teal: '#00c2a8', tealDim: 'rgba(0,194,168,0.15)',
+    tealBorder: 'rgba(0,194,168,0.3)', green: '#26c98a', greenDim: 'rgba(38,201,138,0.12)',
+    red: '#e05c5c', redDim: 'rgba(224,92,92,0.12)', yellow: '#f0b429', blue: '#4a9eff',
+    text: '#c8d8e8', textDim: '#6a8fa8', textFaint: '#3a5a70', mono: 'JetBrains Mono, monospace',
+};
+// ─── App ──────────────────────────────────────────────────────────────────────
+function App() {
     const [trades, setTrades] = useState([]);
     const [meta, setMeta] = useState({});
-    const [settings, setSettings] = useState(DEFAULT_SETTINGS);
-    const [tab, setTab] = useState('overview');
+    const [sett, setSett] = useState(DEF);
+    const [tab, setTab] = useState('dashboard');
     const [msg, setMsg] = useState(null);
-    const [sortKey, setSortKey] = useState('exitTime');
-    const [sortDir, setSortDir] = useState('desc');
+    const [sk, setSk] = useState('exitTime');
+    const [sd, setSd] = useState('desc');
     const [fSym, setFSym] = useState('all');
     const [fDir, setFDir] = useState('all');
     const [fSetup, setFSetup] = useState('all');
@@ -310,114 +229,102 @@ function TradingJournal() {
     const fileRef = useRef(null);
     useEffect(() => {
         try {
-            const t = localStorage.getItem(STORAGE_KEY);
+            const t = localStorage.getItem(SK);
             if (t)
                 setTrades(JSON.parse(t));
         }
         catch (_a) { }
         try {
-            const s = localStorage.getItem(SETTINGS_KEY);
+            const s = localStorage.getItem(SS);
             if (s)
-                setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(s) });
+                setSett({ ...DEF, ...JSON.parse(s) });
         }
         catch (_b) { }
         try {
-            const m = localStorage.getItem(METADATA_KEY);
+            const m = localStorage.getItem(SM);
             if (m)
                 setMeta(JSON.parse(m));
         }
         catch (_c) { }
     }, []);
-    const saveTrades = n => { setTrades(n); try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(n));
+    const saveT = n => { setTrades(n); try {
+        localStorage.setItem(SK, JSON.stringify(n));
     }
     catch (_a) { } };
-    const saveSett = n => { setSettings(n); try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(n));
+    const saveS = n => { setSett(n); try {
+        localStorage.setItem(SS, JSON.stringify(n));
     }
     catch (_a) { } };
-    const saveMeta = n => { setMeta(n); try {
-        localStorage.setItem(METADATA_KEY, JSON.stringify(n));
+    const saveM = n => { setMeta(n); try {
+        localStorage.setItem(SM, JSON.stringify(n));
     }
     catch (_a) { } };
-    const updateMeta = (id, patch) => saveMeta({ ...meta, [id]: { ...(meta[id] || {}), ...patch } });
+    const upMeta = (id, p) => saveM({ ...meta, [id]: { ...(meta[id] || {}), ...p } });
     const handleFile = async (e) => {
         var _a;
         const file = (_a = e.target.files) === null || _a === void 0 ? void 0 : _a[0];
         if (!file)
             return;
-        const text = await file.text();
+        const txt = await file.text();
         try {
-            const newTrades = pairFills(parseCSV(text).map(normaliseFill));
-            if (!newTrades.length) {
-                setMsg({ type: 'err', text: 'No valid trades found. Check this is a TradingView Order History export.' });
+            const nt = pairFills(parseCSV(txt).map(normFill));
+            if (!nt.length) {
+                setMsg({ t: 'err', s: 'No valid trades found — use TradingView Order History export.' });
                 return;
             }
-            const map = new Map(trades.map(t => [t.id, t]));
-            newTrades.forEach(t => map.set(t.id, t));
-            const merged = Array.from(map.values()).sort((a, b) => a.exitTime - b.exitTime);
-            saveTrades(merged);
-            setMsg({ type: 'ok', text: `Imported ${newTrades.length} round-trip trade${newTrades.length === 1 ? '' : 's'}.` });
+            const m = new Map(trades.map(t => [t.id, t]));
+            nt.forEach(t => m.set(t.id, t));
+            saveT(Array.from(m.values()).sort((a, b) => a.exitTime - b.exitTime));
+            setMsg({ t: 'ok', s: `Imported ${nt.length} trade${nt.length === 1 ? '' : 's'}.` });
         }
-        catch (err) {
-            setMsg({ type: 'err', text: 'Parse error: ' + err.message });
+        catch (e) {
+            setMsg({ t: 'err', s: 'Parse error: ' + e.message });
         }
         e.target.value = '';
     };
     const clearAll = () => { if (!confirm('Delete all trades and notes?'))
-        return; saveTrades([]); saveMeta({}); setMsg(null); };
-    const exportJSON = () => {
-        const blob = new Blob([JSON.stringify({ trades, meta, settings }, null, 2)], { type: 'application/json' });
+        return; saveT([]); saveM({}); setMsg(null); };
+    const doExport = () => {
+        const b = new Blob([JSON.stringify({ trades, meta, sett }, null, 2)], { type: 'application/json' });
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `journal-${new Date().toISOString().slice(0, 10)}.json`;
+        a.href = URL.createObjectURL(b);
+        a.download = `mtj-${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
     };
-    // Enrich trades with metadata and fees
     const enriched = useMemo(() => trades.map(t => {
         const m = meta[t.id] || {};
-        return { ...applyFees(t, settings.feeRate), note: m.note || '', setupTags: m.setupTags || [], execTags: m.execTags || [], rating: m.rating || 0 };
-    }), [trades, meta, settings.feeRate]);
-    const filtered = useMemo(() => enriched.filter(t => (fSym === 'all' || t.symbol === fSym) &&
-        (fDir === 'all' || t.direction === fDir) &&
-        (fSetup === 'all' || t.setupTags.includes(fSetup))), [enriched, fSym, fDir, fSetup]);
+        return { ...addFees(t, sett.feeRate), note: m.note || '', setupTags: m.setupTags || [], execTags: m.execTags || [], rating: m.rating || 0 };
+    }), [trades, meta, sett.feeRate]);
+    const filtered = useMemo(() => enriched.filter(t => (fSym === 'all' || t.symbol === fSym) && (fDir === 'all' || t.direction === fDir) && (fSetup === 'all' || t.setupTags.includes(fSetup))), [enriched, fSym, fDir, fSetup]);
     const symbols = useMemo(() => Array.from(new Set(trades.map(t => t.symbol))), [trades]);
     const stats = useMemo(() => {
-        const list = filtered;
-        const n = list.length;
+        const L = filtered, n = L.length;
         if (!n)
             return null;
-        const wins = list.filter(t => t.pnlNet > 0), losses = list.filter(t => t.pnlNet < 0);
-        const longs = list.filter(t => t.direction === 'long'), shorts = list.filter(t => t.direction === 'short');
-        const totalPnl = list.reduce((a, t) => a + t.pnlNet, 0);
-        const totalGross = list.reduce((a, t) => a + t.pnl, 0);
-        const totalFees = list.reduce((a, t) => a + t.fees, 0);
-        const gW = wins.reduce((a, t) => a + t.pnlNet, 0);
-        const gL = Math.abs(losses.reduce((a, t) => a + t.pnlNet, 0));
-        const winRate = (wins.length / n) * 100;
-        const avgWin = wins.length ? gW / wins.length : 0, avgLoss = losses.length ? gL / losses.length : 0;
-        const pf = gL > 0 ? gW / gL : gW > 0 ? Infinity : 0;
-        const avgRR = avgLoss > 0 ? avgWin / avgLoss : 0;
-        let eq = settings.startingBalance, peak = eq, maxDD = 0, maxDDPct = 0, eqG = eq;
-        const curve = [{ idx: 0, equity: eq, equityGross: eq }];
+        const wins = L.filter(t => t.pnlNet > 0), losses = L.filter(t => t.pnlNet < 0);
+        const longs = L.filter(t => t.direction === 'long'), shorts = L.filter(t => t.direction === 'short');
+        const netPnl = L.reduce((a, t) => a + t.pnlNet, 0), grossPnl = L.reduce((a, t) => a + t.pnl, 0), totalFees = L.reduce((a, t) => a + t.fees, 0);
+        const gW = wins.reduce((a, t) => a + t.pnlNet, 0), gL = Math.abs(losses.reduce((a, t) => a + t.pnlNet, 0));
+        const wr = wins.length / n * 100, avgW = wins.length ? gW / wins.length : 0, avgL = losses.length ? gL / losses.length : 0;
+        const pf = gL > 0 ? gW / gL : gW > 0 ? Infinity : 0, rr = avgL > 0 ? avgW / avgL : 0;
+        let eq = sett.startingBalance, peak = eq, maxDD = 0, eqG = eq;
+        const curve = [{ idx: 0, equity: eq, gross: eq }];
         for (let i = 0; i < n; i++) {
-            eq += list[i].pnlNet;
-            eqG += list[i].pnl;
+            eq += L[i].pnlNet;
+            eqG += L[i].pnl;
             peak = Math.max(peak, eq);
-            const dd = peak - eq, ddp = peak > 0 ? dd / peak * 100 : 0;
+            const dd = peak - eq;
             if (dd > maxDD)
                 maxDD = dd;
-            if (ddp > maxDDPct)
-                maxDDPct = ddp;
-            curve.push({ idx: i + 1, equity: eq, equityGross: eqG });
+            curve.push({ idx: i + 1, equity: eq, gross: eqG, pnl: L[i].pnlNet, day: fdateShort(L[i].exitTime) });
         }
         let cs = 0, csS = 0, lW = 0, lL = 0;
-        for (const t of list) {
+        for (const t of L) {
             const s = t.pnlNet > 0 ? 1 : t.pnlNet < 0 ? -1 : 0;
             if (s === csS && s !== 0)
                 cs++;
             else {
-                cs = s === 0 ? 0 : 1;
+                cs = s ? 1 : 0;
                 csS = s;
             }
             if (s === 1)
@@ -425,200 +332,569 @@ function TradingJournal() {
             if (s === -1)
                 lL = Math.max(lL, cs);
         }
-        return {
-            n, wins: wins.length, losses: losses.length, breakeven: list.filter(t => t.pnlNet === 0).length,
-            longs: longs.length, shorts: shorts.length,
+        return { n, wins: wins.length, losses: losses.length, longs: longs.length, shorts: shorts.length,
             longsWR: longs.length ? longs.filter(t => t.pnlNet > 0).length / longs.length * 100 : 0,
             shortsWR: shorts.length ? shorts.filter(t => t.pnlNet > 0).length / shorts.length * 100 : 0,
-            totalPnl, totalGross, totalFees, avgFee: totalFees / n,
-            gW, gL, winRate, avgWin, avgLoss, pf, avgRR,
-            expectancy: totalPnl / n, curve, maxDD, maxDDPct, peak,
-            lW, lL, finalEq: eq, finalEqG: eqG,
-        };
-    }, [filtered, settings.startingBalance]);
-    const setupStats = useMemo(() => {
-        const map = {};
-        for (const t of filtered) {
-            const tags = t.setupTags.length ? t.setupTags : ['Untagged'];
-            for (const tag of tags) {
-                if (!map[tag])
-                    map[tag] = { tag, n: 0, wins: 0, pnl: 0 };
-                map[tag].n++;
-                map[tag].pnl += t.pnlNet;
-                if (t.pnlNet > 0)
-                    map[tag].wins++;
-            }
-        }
-        return Object.values(map).map(s => ({ ...s, wr: s.n ? s.wins / s.n * 100 : 0, avg: s.pnl / s.n })).sort((a, b) => b.n - a.n);
-    }, [filtered]);
-    const execStats = useMemo(() => {
-        const map = {};
-        for (const t of filtered)
-            for (const tag of t.execTags) {
-                if (!map[tag])
-                    map[tag] = { tag, n: 0, pnl: 0 };
-                map[tag].n++;
-                map[tag].pnl += t.pnlNet;
-            }
-        return Object.values(map).sort((a, b) => b.n - a.n);
-    }, [filtered]);
-    const sessionStats = useMemo(() => {
-        const b = {};
-        for (const t of filtered) {
-            const s = sessionOf(t.entryTime);
-            if (!b[s])
-                b[s] = { session: s, n: 0, wins: 0, pnl: 0 };
-            b[s].n++;
-            b[s].pnl += t.pnlNet;
+            netPnl, grossPnl, totalFees, avgFee: totalFees / n, gW, gL, wr, avgW, avgL, pf, avgRR: rr,
+            expectancy: netPnl / n, curve, maxDD, peak, lW, lL, finalEq: eq, finalEqG: eqG };
+    }, [filtered, sett.startingBalance]);
+    const dailyPnl = useMemo(() => { const m = {}; for (const t of filtered) {
+        const d = isoDay(t.exitTime);
+        m[d] = (m[d] || 0) + t.pnlNet;
+    } return m; }, [filtered]);
+    const weeklyStats = useMemo(() => { const m = {}; for (const t of filtered) {
+        const w = isoWeek(t.exitTime);
+        if (!m[w])
+            m[w] = { week: w, n: 0, wins: 0, pnl: 0, first: isoDay(t.exitTime) };
+        m[w].n++;
+        m[w].pnl += t.pnlNet;
+        if (t.pnlNet > 0)
+            m[w].wins++;
+    } return Object.values(m).sort((a, b) => a.week.localeCompare(b.week)).map(w => ({ ...w, wr: w.n ? w.wins / w.n * 100 : 0 })); }, [filtered]);
+    const sessionStats = useMemo(() => { const b = {}; for (const t of filtered) {
+        const s = session(t.entryTime);
+        if (!b[s])
+            b[s] = { s, n: 0, wins: 0, pnl: 0 };
+        b[s].n++;
+        b[s].pnl += t.pnlNet;
+        if (t.pnlNet > 0)
+            b[s].wins++;
+    } return ['Asia', 'London', 'Overlap', 'NY', 'After'].map(s => b[s] || { s, n: 0, wins: 0, pnl: 0 }).map(b => ({ ...b, wr: b.n ? b.wins / b.n * 100 : 0 })); }, [filtered]);
+    const hourStats = useMemo(() => { const b = Array.from({ length: 24 }, (_, h) => ({ h, n: 0, pnl: 0 })); for (const t of filtered) {
+        const h = new Date(t.entryTime).getUTCHours();
+        b[h].n++;
+        b[h].pnl += t.pnlNet;
+    } return b; }, [filtered]);
+    const setupStats = useMemo(() => { const m = {}; for (const t of filtered) {
+        const tags = t.setupTags.length ? t.setupTags : ['Untagged'];
+        for (const tag of tags) {
+            if (!m[tag])
+                m[tag] = { tag, n: 0, wins: 0, pnl: 0 };
+            m[tag].n++;
+            m[tag].pnl += t.pnlNet;
             if (t.pnlNet > 0)
-                b[s].wins++;
+                m[tag].wins++;
         }
-        return ['Asia', 'London', 'Overlap', 'NY', 'After-hours'].map(s => b[s] || { session: s, n: 0, wins: 0, pnl: 0 }).map(b => ({ ...b, wr: b.n ? b.wins / b.n * 100 : 0 }));
-    }, [filtered]);
-    const hourStats = useMemo(() => {
-        const b = Array.from({ length: 24 }, (_, h) => ({ hour: h, n: 0, pnl: 0 }));
-        for (const t of filtered) {
-            const h = new Date(t.entryTime).getUTCHours();
-            b[h].n++;
-            b[h].pnl += t.pnlNet;
-        }
-        return b;
-    }, [filtered]);
-    const dailyPnl = useMemo(() => {
-        const m = {};
-        for (const t of filtered) {
-            const d = isoDay(t.exitTime);
-            m[d] = (m[d] || 0) + t.pnlNet;
-        }
-        return m;
-    }, [filtered]);
-    const weeklyStats = useMemo(() => {
-        const m = {};
-        for (const t of filtered) {
-            const w = isoWeek(t.exitTime);
-            if (!m[w])
-                m[w] = { week: w, n: 0, wins: 0, pnl: 0, firstDay: isoDay(t.exitTime) };
-            m[w].n++;
-            m[w].pnl += t.pnlNet;
-            if (t.pnlNet > 0)
-                m[w].wins++;
-        }
-        return Object.values(m).sort((a, b) => a.week.localeCompare(b.week)).map(w => ({ ...w, wr: w.n ? w.wins / w.n * 100 : 0 }));
-    }, [filtered]);
+    } return Object.values(m).map(s => ({ ...s, wr: s.n ? s.wins / s.n * 100 : 0, avg: s.pnl / s.n })).sort((a, b) => b.n - a.n); }, [filtered]);
+    const execStats = useMemo(() => { const m = {}; for (const t of filtered)
+        for (const tag of t.execTags) {
+            if (!m[tag])
+                m[tag] = { tag, n: 0, pnl: 0 };
+            m[tag].n++;
+            m[tag].pnl += t.pnlNet;
+        } return Object.values(m).sort((a, b) => b.n - a.n); }, [filtered]);
     const propStats = useMemo(() => {
-        const list = filtered;
-        if (!list.length)
+        const L = filtered;
+        if (!L.length)
             return null;
-        const sz = settings.propAccountSize;
-        const pt = sz * settings.propProfitTargetPct / 100;
-        const dll = sz * settings.propDailyLossPct / 100;
-        const mddl = sz * settings.propMaxDDPct / 100;
-        const floor = sz - mddl;
-        let eq = sz, breach = null, targetHit = null;
-        const curve = [{ idx: 0, equity: sz }];
-        const dp = {}, dce = {};
-        for (const t of list) {
-            const d = isoDay(t.exitTime);
-            dp[d] = (dp[d] || 0) + t.pnlNet;
-        }
-        for (let i = 0; i < list.length; i++) {
-            const t = list[i];
-            const day = isoDay(t.exitTime);
+        const sz = sett.propAccountSize, pt = sz * sett.propProfitTargetPct / 100, dll = sz * sett.propDailyLossPct / 100, mddl = sz * sett.propMaxDDPct / 100, floor = sz - mddl;
+        let eq = sz, breach = null, hit = null;
+        const curve = [{ idx: 0, equity: sz }], dp = {}, dce = {};
+        for (let i = 0; i < L.length; i++) {
+            const t = L[i], day = isoDay(t.exitTime);
+            dp[day] = (dp[day] || 0) + t.pnlNet;
             eq += t.pnlNet;
             dce[day] = eq;
             curve.push({ idx: i + 1, equity: eq });
             if (!breach && eq <= floor)
-                breach = { rule: 'Max drawdown', detail: `Equity hit ${fmt$(eq)}, below floor ${fmt$(floor)}`, atTrade: i + 1, atDay: day };
-            const sd = Object.keys(dce).sort();
-            const ti = sd.indexOf(day);
-            const prev = ti > 0 ? dce[sd[ti - 1]] : sz;
+                breach = { rule: 'Max drawdown', detail: `Equity ${$$(eq)} below floor ${$$(floor)}`, at: i + 1, day };
+            const sd = Object.keys(dce).sort(), ti = sd.indexOf(day), prev = ti > 0 ? dce[sd[ti - 1]] : sz;
             if (!breach && prev - eq >= dll)
-                breach = { rule: 'Daily loss limit', detail: `Down ${fmt$(prev - eq)} from ${fmt$(prev)} on ${day}, limit ${fmt$(dll)}`, atTrade: i + 1, atDay: day };
-            if (!targetHit && !breach && eq >= sz + pt)
-                targetHit = { atTrade: i + 1, atDay: day, equity: eq };
+                breach = { rule: 'Daily loss limit', detail: `Down ${$$(prev - eq)} from ${$$(prev)} on ${day}`, at: i + 1, day };
+            if (!hit && !breach && eq >= sz + pt)
+                hit = { at: i + 1, day, equity: eq };
         }
-        const dpv = Object.values(dp);
-        const finalProfit = eq - sz;
-        const cuw = Math.max(0, sz - eq);
-        return {
-            size: sz, profitTarget: pt, dailyLossLimit: dll, maxDDLimit: mddl, ddFloor: floor,
-            equity: eq, finalProfit, payout: finalProfit > 0 ? finalProfit * settings.propProfitSplitPct / 100 : 0,
-            currentUnderwater: cuw, ddUsedPct: cuw / mddl * 100,
-            profitProgressPct: Math.max(0, Math.min(100, finalProfit / pt * 100)),
-            breach, targetHit, status: breach ? 'fail' : targetHit ? 'pass' : 'in-progress',
-            curve, dailyClosingEquity: dce,
-            tradingDays: Object.keys(dp).length,
-            profitableDays: dpv.filter(v => v > 0).length,
-            losingDays: dpv.filter(v => v < 0).length,
-        };
-    }, [filtered, settings.propAccountSize, settings.propProfitTargetPct, settings.propDailyLossPct, settings.propMaxDDPct, settings.propProfitSplitPct]);
+        const dpv = Object.values(dp), fp = eq - sz, cuw = Math.max(0, sz - eq);
+        return { sz, pt, dll, mddl, floor, equity: eq, fp, payout: fp > 0 ? fp * sett.propProfitSplitPct / 100 : 0, cuw, ddPct: cuw / mddl * 100, progPct: Math.max(0, Math.min(100, fp / pt * 100)), breach, hit, status: breach ? 'fail' : hit ? 'pass' : 'active', curve, dce, days: Object.keys(dp).length, greenDays: dpv.filter(v => v > 0).length, redDays: dpv.filter(v => v < 0).length };
+    }, [filtered, sett.propAccountSize, sett.propProfitTargetPct, sett.propDailyLossPct, sett.propMaxDDPct, sett.propProfitSplitPct]);
     const sortedTrades = useMemo(() => {
-        const arr = [...filtered];
-        arr.sort((a, b) => { const va = a[sortKey], vb = b[sortKey]; if (va < vb)
-            return sortDir === 'asc' ? -1 : 1; if (va > vb)
-            return sortDir === 'asc' ? 1 : -1; return 0; });
-        return arr;
-    }, [filtered, sortKey, sortDir]);
-    const doSort = k => { if (sortKey === k)
-        setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+        const a = [...filtered];
+        a.sort((x, y) => { const vx = x[sk], vy = y[sk]; if (vx < vy)
+            return sd === 'asc' ? -1 : 1; if (vx > vy)
+            return sd === 'asc' ? 1 : -1; return 0; });
+        return a;
+    }, [filtered, sk, sd]);
+    const doSort = k => { if (sk === k)
+        setSd(sd === 'asc' ? 'desc' : 'asc');
     else {
-        setSortKey(k);
-        setSortDir('desc');
+        setSk(k);
+        setSd('desc');
     } };
-    const TABS = ['overview', 'analytics', 'calendar', 'trades', 'propfirm', 'settings'];
-    return (React.createElement("div", { style: S.app },
-        React.createElement("header", { style: S.header },
-            React.createElement("div", { style: S.brand },
-                React.createElement("div", { style: S.brandMark }, "\u25E2\u25E3"),
-                React.createElement("div", null,
-                    React.createElement("div", { style: S.brandTitle }, "LEDGER"),
-                    React.createElement("div", { style: S.brandSub }, "paper trade journal \u00B7 btc \u00B7 eth"))),
-            React.createElement("div", { style: S.headerActions },
-                React.createElement("div", { style: S.feeChip },
-                    React.createElement("span", { style: S.feeChipLabel }, "Fee/leg"),
-                    React.createElement("input", { type: "number", step: "0.01", min: "0", value: settings.feeRate, onChange: e => saveSett({ ...settings, feeRate: parseFloat(e.target.value) || 0 }), style: S.feeChipInput }),
-                    React.createElement("span", { style: S.feeChipUnit }, "%")),
-                React.createElement("button", { style: S.btnGhost, onClick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); } },
-                    React.createElement(Upload, null),
-                    " ",
-                    React.createElement("span", null, "Import")),
+    const TABS = [{ id: 'dashboard', label: 'Dashboard' }, { id: 'analytics', label: 'Analytics' }, { id: 'calendar', label: 'Calendar' }, { id: 'trades', label: 'Trades' }, { id: 'propfirm', label: 'Prop Firm' }, { id: 'settings', label: 'Settings' }];
+    return (React.createElement("div", { style: { display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, overflow: 'hidden' } },
+        React.createElement("nav", { style: { display: 'flex', alignItems: 'center', gap: 0, background: C.sidebar, borderBottom: `1px solid ${C.border}`, height: 52, flexShrink: 0, paddingLeft: 16, paddingRight: 16 } },
+            React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10, marginRight: 32, flexShrink: 0 } },
+                React.createElement("svg", { width: 28, height: 28, viewBox: "0 0 28 28" },
+                    React.createElement("rect", { width: 28, height: 28, rx: 5, fill: C.teal, opacity: 0.15 }),
+                    React.createElement("polyline", { points: "4,22 9,13 14,17 19,7 24,11", fill: "none", stroke: C.teal, strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round" }),
+                    React.createElement("circle", { cx: 19, cy: 7, r: 2, fill: C.teal })),
+                React.createElement("span", { style: { fontWeight: 700, fontSize: 14, color: '#e8f4ff', letterSpacing: '0.02em' } }, "My Trade Journal")),
+            React.createElement("div", { style: { display: 'flex', gap: 0, flex: 1, overflowX: 'auto' } }, TABS.map(t => (React.createElement("button", { key: t.id, onClick: () => setTab(t.id), style: { background: 'transparent', border: 'none', borderBottom: `2px solid ${tab === t.id ? C.teal : 'transparent'}`, color: tab === t.id ? C.teal : C.textDim, padding: '0 16px', height: 52, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, whiteSpace: 'nowrap', transition: 'color 0.15s' } }, t.label)))),
+            React.createElement("div", { style: { display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 } },
+                React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,194,168,0.08)', border: `1px solid ${C.tealBorder}`, borderRadius: 4, padding: '4px 10px 4px 12px' } },
+                    React.createElement("span", { style: { fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: C.teal, fontWeight: 700 } }, "Fee/leg"),
+                    React.createElement("input", { type: "number", step: "0.01", min: "0", value: sett.feeRate, onChange: e => saveS({ ...sett, feeRate: parseFloat(e.target.value) || 0 }), style: { background: 'transparent', border: 'none', color: '#e8f4ff', fontFamily: C.mono, fontSize: 12, fontWeight: 600, width: 44, padding: 0, textAlign: 'right', outline: 'none' } }),
+                    React.createElement("span", { style: { color: C.textDim, fontSize: 11, fontFamily: C.mono } }, "%")),
+                React.createElement(Btn, { onClick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, icon: React.createElement(IcoUpload, null) }, "Import"),
                 React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: 'none' } }),
-                React.createElement("button", { style: S.btnGhost, onClick: exportJSON, disabled: !trades.length },
-                    React.createElement(Download, null),
-                    " ",
-                    React.createElement("span", null, "Export")),
-                React.createElement("button", { style: S.btnDanger, onClick: clearAll, disabled: !trades.length },
-                    React.createElement(Trash2, null)))),
-        msg && (React.createElement("div", { style: { ...S.banner, ...(msg.type === 'ok' ? S.bannerOk : S.bannerErr) } },
-            React.createElement(AlertCircle, null),
-            " ",
-            msg.text,
-            React.createElement("button", { onClick: () => setMsg(null), style: S.bannerClose }, "\u00D7"))),
-        !trades.length ? (React.createElement(EmptyState, { onPick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, settings: settings, onSettings: saveSett })) : (React.createElement(React.Fragment, null,
-            React.createElement("div", { style: S.controls },
-                React.createElement("div", { style: S.tabs }, TABS.map(t => (React.createElement("button", { key: t, onClick: () => setTab(t), style: { ...S.tab, ...(tab === t ? S.tabActive : {}) } }, t === 'propfirm' ? 'prop firm' : t)))),
-                React.createElement("div", { style: S.filters },
-                    React.createElement("select", { value: fSym, onChange: e => setFSym(e.target.value), style: S.select },
-                        React.createElement("option", { value: "all" }, "All symbols"),
-                        symbols.map(s => React.createElement("option", { key: s, value: s }, s))),
-                    React.createElement("select", { value: fDir, onChange: e => setFDir(e.target.value), style: S.select },
-                        React.createElement("option", { value: "all" }, "All directions"),
-                        React.createElement("option", { value: "long" }, "Longs"),
-                        React.createElement("option", { value: "short" }, "Shorts")),
-                    React.createElement("select", { value: fSetup, onChange: e => setFSetup(e.target.value), style: S.select },
-                        React.createElement("option", { value: "all" }, "All setups"),
-                        SETUP_TAGS.map(s => React.createElement("option", { key: s, value: s }, s))))),
-            tab === 'overview' && stats && React.createElement(Overview, { stats: stats, settings: settings }),
+                React.createElement(Btn, { onClick: doExport, disabled: !trades.length, icon: React.createElement(IcoDownload, null) }, "Export"),
+                React.createElement("button", { onClick: clearAll, disabled: !trades.length, style: { display: 'inline-flex', alignItems: 'center', padding: '6px 10px', background: 'transparent', border: `1px solid ${C.redDim}`, color: '#9a5a5a', fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 4, gap: 5 } },
+                    React.createElement(IcoTrash, { s: 12 })))),
+        msg && React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 20px', fontSize: 12, background: msg.t === 'ok' ? 'rgba(38,201,138,0.08)' : 'rgba(224,92,92,0.08)', borderBottom: `1px solid ${msg.t === 'ok' ? 'rgba(38,201,138,0.25)' : 'rgba(224,92,92,0.25)'}`, color: msg.t === 'ok' ? C.green : C.red, flexShrink: 0 } },
+            React.createElement(IcoAlert, { s: 13 }),
+            msg.s,
+            React.createElement("button", { onClick: () => setMsg(null), style: { marginLeft: 'auto', background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, lineHeight: 1 } }, "\u00D7")),
+        trades.length > 0 && React.createElement("div", { style: { display: 'flex', gap: 8, padding: '8px 16px', background: C.sidebar, borderBottom: `1px solid ${C.border}`, flexShrink: 0, alignItems: 'center' } },
+            React.createElement("span", { style: { fontSize: 10, color: C.textFaint, letterSpacing: '0.12em', textTransform: 'uppercase', marginRight: 4 } }, "Filter:"),
+            [['Symbol', fSym, setFSym, [['all', 'All symbols'], ...symbols.map(s => [s, s])]], ['Direction', fDir, setFDir, [['all', 'All'], ['long', 'Longs'], ['short', 'Shorts']]], ['Setup', fSetup, setFSetup, [['all', 'All setups'], ...SETUPS.map(s => [s, s])]]].map(([label, val, set, opts]) => (React.createElement("div", { key: label, style: { position: 'relative' } },
+                React.createElement("select", { value: val, onChange: e => set(e.target.value), style: { background: C.card, border: `1px solid ${C.border2}`, color: C.text, padding: '5px 28px 5px 10px', fontSize: 11, fontFamily: 'inherit', borderRadius: 4, cursor: 'pointer', outline: 'none' } }, opts.map(([v, l]) => React.createElement("option", { key: v, value: v }, l))),
+                React.createElement(IcoDn, { s: 10, style: { position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: C.textDim } })))),
+            trades.length > 0 && React.createElement("span", { style: { marginLeft: 'auto', fontSize: 10, color: C.textFaint, fontFamily: C.mono } },
+                filtered.length,
+                "/",
+                trades.length,
+                " trades \u00B7 ",
+                symbols.join(' · '))),
+        React.createElement("div", { style: { flex: 1, overflowY: 'auto', overflowX: 'hidden' } }, !trades.length ? React.createElement(EmptyState, { onPick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, sett: sett, setSett: saveS }) : (React.createElement(React.Fragment, null,
+            tab === 'dashboard' && stats && React.createElement(Dashboard, { stats: stats, sett: sett, dailyPnl: dailyPnl, recentTrades: sortedTrades.slice(0, 10), onEdit: setEditing }),
             tab === 'analytics' && stats && React.createElement(Analytics, { stats: stats, sessionStats: sessionStats, hourStats: hourStats, setupStats: setupStats, execStats: execStats, weeklyStats: weeklyStats }),
-            tab === 'calendar' && React.createElement(CalendarView, { dailyPnl: dailyPnl, trades: filtered }),
-            tab === 'trades' && React.createElement(TradesTable, { trades: sortedTrades, sortKey: sortKey, sortDir: sortDir, doSort: doSort, onEdit: setEditing }),
-            tab === 'propfirm' && propStats && React.createElement(PropFirm, { ps: propStats, settings: settings, onChange: saveSett, trades: filtered }),
-            tab === 'settings' && React.createElement(SettingsTab, { settings: settings, onChange: saveSett }))),
-        editing && (React.createElement(EditModal, { trade: editing, meta: meta[editing.id] || {}, onSave: patch => { updateMeta(editing.id, patch); setEditing(null); }, onClose: () => setEditing(null) })),
-        React.createElement("footer", { style: S.footer }, trades.length > 0 && React.createElement("span", null,
-            trades.length,
-            " trades \u00B7 ",
-            symbols.join(' · ')))));
+            tab === 'calendar' && React.createElement(CalendarTab, { dailyPnl: dailyPnl, trades: filtered }),
+            tab === 'trades' && React.createElement(TradesTab, { trades: sortedTrades, sk: sk, sd: sd, doSort: doSort, onEdit: setEditing }),
+            tab === 'propfirm' && propStats && React.createElement(PropFirmTab, { ps: propStats, sett: sett, setSett: saveS, trades: filtered }),
+            tab === 'settings' && React.createElement(SettingsTab, { sett: sett, setSett: saveS })))),
+        editing && React.createElement(EditModal, { trade: editing, meta: meta[editing.id] || {}, onSave: p => { upMeta(editing.id, p); setEditing(null); }, onClose: () => setEditing(null) })));
+}
+// ─── Button ───────────────────────────────────────────────────────────────────
+function Btn({ onClick, disabled, icon, children }) {
+    return React.createElement("button", { onClick: onClick, disabled: disabled, style: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'transparent', border: `1px solid ${C.border2}`, color: C.text, fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 4, fontWeight: 500 } },
+        icon,
+        children);
+}
+// ─── Card ─────────────────────────────────────────────────────────────────────
+function Card({ children, style, title, sub, action }) {
+    return (React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, overflow: 'hidden', ...style } },
+        title && React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px 0', marginBottom: 4 } },
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 600, color: C.text, letterSpacing: '0.04em', textTransform: 'uppercase' } }, title),
+                sub && React.createElement("div", { style: { fontSize: 10, color: C.textDim, marginTop: 2 } }, sub)),
+            action),
+        React.createElement("div", { style: { padding: 16 } }, children)));
+}
+// ─── Stat box ─────────────────────────────────────────────────────────────────
+function Stat({ label, value, sub, accent, badge, badgeColor }) {
+    return (React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 4 } },
+        React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
+            React.createElement("span", { style: { fontSize: 10, color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 } }, label),
+            badge && React.createElement("span", { style: { fontSize: 9, padding: '2px 6px', borderRadius: 3, background: badgeColor || C.tealDim, color: badgeColor ? '#fff' : C.teal, fontWeight: 600, letterSpacing: '0.06em' } }, badge)),
+        React.createElement("div", { style: { fontFamily: C.mono, fontSize: 24, fontWeight: 600, color: accent || C.text, letterSpacing: '-0.02em', lineHeight: 1.1 } }, value),
+        sub && React.createElement("div", { style: { fontSize: 10, color: C.textDim, marginTop: 2 } }, sub)));
+}
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+function Dashboard({ stats, sett, dailyPnl, recentTrades, onEdit }) {
+    const pc = stats.netPnl >= 0 ? C.green : C.red;
+    // Daily bar data last 30 days
+    const allDays = Object.keys(dailyPnl).sort().slice(-30);
+    const barData = allDays.map(d => ({ d: d.slice(5), pnl: dailyPnl[d] }));
+    return (React.createElement("div", { style: { padding: 16, display: 'flex', flexDirection: 'column', gap: 12 } },
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10 } },
+            React.createElement(Stat, { label: "Net P&L", value: $$(stats.netPnl), sub: `${pct(stats.netPnl / sett.startingBalance * 100)} on balance`, accent: pc, badge: stats.netPnl >= 0 ? 'PROFIT' : 'LOSS', badgeColor: stats.netPnl >= 0 ? 'rgba(38,201,138,0.2)' : 'rgba(224,92,92,0.2)' }),
+            React.createElement(Stat, { label: "Trade Win %", value: `${(stats.wr || 0).toFixed(1)}%`, sub: `${stats.wins}W · ${stats.losses}L`, accent: stats.wr >= 50 ? C.green : C.red }),
+            React.createElement(Stat, { label: "Profit Factor", value: isFinite(stats.pf) ? stats.pf.toFixed(2) : '∞', sub: `${$$(stats.gW, 0)} win / ${$$(stats.gL, 0)} loss`, accent: stats.pf >= 1 ? C.teal : C.red }),
+            React.createElement(Stat, { label: "Trade Expectancy", value: $$(stats.expectancy), sub: "avg per trade, post-fee", accent: stats.expectancy >= 0 ? C.teal : C.red }),
+            React.createElement(Stat, { label: "Avg Win/Loss", value: stats.avgL > 0 ? stats.avgRR.toFixed(2) : '—', sub: `${$$(stats.avgW)} / ${$$(stats.avgL)}`, accent: C.blue }),
+            React.createElement(Stat, { label: "Total Fees", value: $$(stats.totalFees), sub: `${$$(stats.avgFee)} avg/trade`, accent: C.yellow })),
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 12 } },
+            React.createElement(Card, { title: "Daily Net Cumulative P&L", sub: "Net equity over all trades" },
+                React.createElement(ResponsiveContainer, { width: "100%", height: 200 },
+                    React.createElement(AreaChart, { data: stats.curve, margin: { top: 5, right: 5, left: 5, bottom: 5 } },
+                        React.createElement("defs", null,
+                            React.createElement("linearGradient", { id: "eqGrad", x1: "0", y1: "0", x2: "0", y2: "1" },
+                                React.createElement("stop", { offset: "5%", stopColor: pc, stopOpacity: 0.25 }),
+                                React.createElement("stop", { offset: "95%", stopColor: pc, stopOpacity: 0 }))),
+                        React.createElement(XAxis, { dataKey: "idx", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: i => i % Math.ceil(stats.n / 5) === 0 ? i : '' }),
+                        React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${(v / 1000).toFixed(1)}k`, width: 48 }),
+                        React.createElement(Tooltip, { contentStyle: { background: '#0d1f30', border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono }, labelStyle: { color: C.textDim }, formatter: v => [$$(v), 'Equity'], labelFormatter: l => `Trade #${l}` }),
+                        React.createElement(ReferenceLine, { y: sett.startingBalance, stroke: C.border2, strokeDasharray: "3 3" }),
+                        React.createElement(Area, { type: "monotone", dataKey: "equity", stroke: pc, strokeWidth: 2, fill: "url(#eqGrad)", dot: false })))),
+            React.createElement(Card, { title: "Net Daily P&L", sub: "Last 30 trading days" },
+                React.createElement(ResponsiveContainer, { width: "100%", height: 200 },
+                    React.createElement(BarChart, { data: barData, margin: { top: 5, right: 5, left: 5, bottom: 5 } },
+                        React.createElement(XAxis, { dataKey: "d", stroke: C.textFaint, fontSize: 8, tickLine: false, axisLine: false, interval: Math.ceil(barData.length / 6) - 1 }),
+                        React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${v.toFixed(0)}`, width: 44 }),
+                        React.createElement(Tooltip, { contentStyle: { background: '#0d1f30', border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono }, formatter: v => [$$(v), 'P&L'] }),
+                        React.createElement(ReferenceLine, { y: 0, stroke: C.border2 }),
+                        React.createElement(Bar, { dataKey: "pnl", radius: [2, 2, 0, 0] }, barData.map((d, i) => React.createElement(Cell, { key: i, fill: d.pnl >= 0 ? C.green : C.red }))))))),
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 12 } },
+            React.createElement(Card, { title: "Recent Trades", action: React.createElement("span", { style: { fontSize: 10, color: C.teal, cursor: 'pointer' }, onClick: () => { } }, "View All \u2192") },
+                React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 1 } },
+                    React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '90px 80px 1fr 80px', gap: 8, padding: '4px 0', marginBottom: 6 } }, ['Close Date', 'Symbol', 'Side', 'Net P&L'].map(h => React.createElement("span", { key: h, style: { fontSize: 9, color: C.textFaint, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 } }, h))),
+                    recentTrades.map(t => (React.createElement("div", { key: t.id, onClick: () => onEdit(t), style: { display: 'grid', gridTemplateColumns: '90px 80px 1fr 80px', gap: 8, padding: '7px 6px', borderRadius: 4, cursor: 'pointer', background: 'transparent', transition: 'background 0.1s' }, onMouseEnter: e => e.currentTarget.style.background = C.cardB, onMouseLeave: e => e.currentTarget.style.background = 'transparent' },
+                        React.createElement("span", { style: { fontSize: 11, color: C.textDim, fontFamily: C.mono } }, fdateShort(t.exitTime)),
+                        React.createElement("span", { style: { fontSize: 11, color: C.text, fontWeight: 600 } }, t.symbol),
+                        React.createElement("span", { style: { fontSize: 10, padding: '2px 7px', borderRadius: 3, background: t.direction === 'long' ? C.greenDim : C.redDim, color: t.direction === 'long' ? C.green : C.red, fontWeight: 600, letterSpacing: '0.08em', width: 'fit-content', textTransform: 'uppercase' } }, t.direction),
+                        React.createElement("span", { style: { fontSize: 12, fontFamily: C.mono, fontWeight: 600, color: t.pnlNet >= 0 ? C.green : C.red, textAlign: 'right' } }, $$(t.pnlNet))))))),
+            React.createElement(CalendarMini, { dailyPnl: dailyPnl }))));
+}
+// ─── Mini calendar (dashboard) ────────────────────────────────────────────────
+function CalendarMini({ dailyPnl }) {
+    const [viewDate, setViewDate] = useState(() => {
+        const days = Object.keys(dailyPnl).sort();
+        return days.length ? new Date(days[days.length - 1] + 'T00:00:00Z') : new Date();
+    });
+    const ym = `${viewDate.getUTCFullYear()}-${String(viewDate.getUTCMonth() + 1).padStart(2, '0')}`;
+    const label = new Date(ym + '-01T00:00:00Z').toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+    const allVals = Object.values(dailyPnl);
+    const maxA = Math.max(...allVals.map(Math.abs), 1);
+    const d0 = new Date(ym + '-01T00:00:00Z');
+    const fdow = d0.getUTCDay() === 0 ? 6 : d0.getUTCDay() - 1;
+    const dim = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 0)).getUTCDate();
+    const prevMonth = () => { const d = new Date(viewDate); d.setUTCMonth(d.getUTCMonth() - 1); setViewDate(d); };
+    const nextMonth = () => { const d = new Date(viewDate); d.setUTCMonth(d.getUTCMonth() + 1); setViewDate(d); };
+    // sum for month
+    const mKeys = Object.keys(dailyPnl).filter(d => d.startsWith(ym));
+    const mPnl = mKeys.reduce((a, d) => a + dailyPnl[d], 0);
+    const mTrades = mKeys.length;
+    return (React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: 16 } },
+        React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 } },
+            React.createElement("button", { onClick: prevMonth, style: { background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: '2px 6px' } }, "\u2039"),
+            React.createElement("div", { style: { textAlign: 'center' } },
+                React.createElement("div", { style: { fontSize: 12, fontWeight: 600, color: C.text } }, label),
+                React.createElement("div", { style: { fontSize: 10, color: mPnl >= 0 ? C.green : C.red, fontFamily: C.mono, marginTop: 2 } },
+                    mPnl >= 0 ? '+' : '',
+                    $$(mPnl),
+                    " \u00B7 ",
+                    mTrades,
+                    " day",
+                    mTrades !== 1 ? 's' : '')),
+            React.createElement("button", { onClick: nextMonth, style: { background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: '2px 6px' } }, "\u203A")),
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 } },
+            ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => React.createElement("div", { key: i, style: { textAlign: 'center', fontSize: 9, color: C.textFaint, fontWeight: 700, paddingBottom: 4 } }, d)),
+            Array.from({ length: fdow }, (_, i) => React.createElement("div", { key: `e${i}` })),
+            Array.from({ length: dim }, (_, i) => {
+                var _a;
+                const day = i + 1, key = `${ym}-${String(day).padStart(2, '0')}`;
+                const p = (_a = dailyPnl[key]) !== null && _a !== void 0 ? _a : null;
+                const bg = p !== null ? calCol(p, maxA) : C.bg;
+                const today = new Date().toISOString().slice(0, 10) === key;
+                return (React.createElement("div", { key: day, title: p !== null ? `${key}: ${$$(p)}` : '', style: { aspectRatio: '1', borderRadius: 3, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: p !== null ? 'rgba(255,255,255,0.75)' : C.textFaint, border: today ? `1px solid ${C.teal}` : `1px solid transparent`, cursor: p !== null ? 'pointer' : 'default' } }, day));
+            }))));
+}
+function calCol(pnl, max) {
+    if (!pnl)
+        return C.bg;
+    const t = Math.min(1, Math.abs(pnl) / max);
+    if (pnl > 0)
+        return `rgb(${Math.round(20 + 46 * t)},${Math.round(120 + 81 * t)},${Math.round(80 + 58 * t)})`;
+    return `rgb(${Math.round(140 + 84 * t)},${Math.round(30 + 62 * t)},${Math.round(30 + 62 * t)})`;
+}
+// ─── Analytics ────────────────────────────────────────────────────────────────
+function Analytics({ stats, sessionStats, hourStats, setupStats, execStats, weeklyStats }) {
+    return (React.createElement("div", { style: { padding: 16, display: 'flex', flexDirection: 'column', gap: 12 } },
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
+            React.createElement(Card, { title: "Long vs Short" },
+                React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 14, marginTop: 4 } }, [['LONG', stats.longs, stats.longsWR, C.green, C.greenDim], ['SHORT', stats.shorts, stats.shortsWR, C.red, C.redDim]].map(([l, n, wr, col, dim]) => (React.createElement("div", { key: l },
+                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 6 } },
+                        React.createElement("span", { style: { fontSize: 10, fontWeight: 700, color: col, letterSpacing: '0.12em' } }, l),
+                        React.createElement("span", { style: { fontFamily: C.mono, fontSize: 12, color: C.text } },
+                            n,
+                            " trades \u00B7 ",
+                            React.createElement("span", { style: { color: col } },
+                                (wr || 0).toFixed(1),
+                                "%"),
+                            " WR")),
+                    React.createElement("div", { style: { height: 6, background: C.border, borderRadius: 2, overflow: 'hidden' } },
+                        React.createElement("div", { style: { height: '100%', width: `${wr}%`, background: col, borderRadius: 2, transition: 'width 0.4s' } }))))))),
+            React.createElement(Card, { title: "Streaks" },
+                React.createElement("div", { style: { display: 'flex', gap: 0, marginTop: 4 } },
+                    React.createElement("div", { style: { flex: 1, textAlign: 'center' } },
+                        React.createElement("div", { style: { fontFamily: C.mono, fontSize: 40, fontWeight: 700, color: C.green, lineHeight: 1 } }, stats.lW),
+                        React.createElement("div", { style: { fontSize: 10, color: C.textDim, marginTop: 6, letterSpacing: '0.08em', textTransform: 'uppercase' } }, "Best win streak")),
+                    React.createElement("div", { style: { width: 1, background: C.border, margin: '0 16px' } }),
+                    React.createElement("div", { style: { flex: 1, textAlign: 'center' } },
+                        React.createElement("div", { style: { fontFamily: C.mono, fontSize: 40, fontWeight: 700, color: C.red, lineHeight: 1 } }, stats.lL),
+                        React.createElement("div", { style: { fontSize: 10, color: C.textDim, marginTop: 6, letterSpacing: '0.08em', textTransform: 'uppercase' } }, "Worst loss streak"))))),
+        React.createElement(Card, { title: "Setup Performance", sub: "Tag trades in the Trades tab to populate" }, setupStats.filter(s => s.tag !== 'Untagged').length === 0
+            ? React.createElement("p", { style: { color: C.textDim, fontSize: 12, marginTop: 4 } }, "No setups tagged yet \u2014 click any trade row.")
+            : React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 } }, setupStats.filter(s => s.tag !== 'Untagged').map(s => (React.createElement("div", { key: s.tag, style: { display: 'flex', alignItems: 'center', gap: 12 } },
+                React.createElement("span", { style: { minWidth: 70, fontSize: 10, fontWeight: 700, color: C.teal, background: C.tealDim, border: `1px solid ${C.tealBorder}`, padding: '3px 8px', borderRadius: 3, textAlign: 'center', letterSpacing: '0.06em' } }, s.tag),
+                React.createElement("span", { style: { fontFamily: C.mono, fontSize: 11, color: C.textDim, minWidth: 60 } },
+                    s.n,
+                    " trades"),
+                React.createElement("span", { style: { fontFamily: C.mono, fontSize: 12, color: s.wr >= 50 ? C.green : C.red, minWidth: 48 } },
+                    (s.wr || 0).toFixed(0),
+                    "% WR"),
+                React.createElement("span", { style: { fontFamily: C.mono, fontSize: 12, color: s.pnl >= 0 ? C.green : C.red, minWidth: 72 } }, $$(s.pnl)),
+                React.createElement("div", { style: { flex: 1, height: 5, background: C.border, borderRadius: 2, overflow: 'hidden' } },
+                    React.createElement("div", { style: { height: '100%', width: `${s.wr}%`, background: s.wr >= 50 ? C.green : C.red, borderRadius: 2 } }))))))),
+        execStats.length > 0 && React.createElement(Card, { title: "Execution Tags" },
+            React.createElement("div", { style: { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 } }, execStats.map(e => (React.createElement("div", { key: e.tag, style: { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 10px', border: `1px solid`, borderRadius: 4, fontSize: 11, background: e.tag === 'Perfect Execution' ? C.greenDim : C.redDim, borderColor: e.tag === 'Perfect Execution' ? 'rgba(38,201,138,0.3)' : 'rgba(224,92,92,0.3)' } },
+                React.createElement("span", { style: { color: e.tag === 'Perfect Execution' ? C.green : C.red, fontWeight: 600 } }, e.tag),
+                React.createElement("span", { style: { color: C.textDim, fontFamily: C.mono, fontSize: 10 } },
+                    e.n,
+                    "\u00D7"),
+                React.createElement("span", { style: { fontFamily: C.mono, fontSize: 10, color: e.pnl >= 0 ? C.green : C.red } }, $$(e.pnl, 0))))))),
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
+            React.createElement(Card, { title: "By Session (UTC)", sub: "Asia 00\u201307 \u00B7 London 07\u201312 \u00B7 Overlap 12\u201316 \u00B7 NY 16\u201321" },
+                React.createElement(ResponsiveContainer, { width: "100%", height: 180 },
+                    React.createElement(BarChart, { data: sessionStats, margin: { top: 10, right: 5, left: 5, bottom: 5 } },
+                        React.createElement(XAxis, { dataKey: "s", stroke: C.textFaint, fontSize: 10, tickLine: false, axisLine: false }),
+                        React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${v.toFixed(0)}`, width: 44 }),
+                        React.createElement(Tooltip, { contentStyle: { background: C.sidebar, border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono }, formatter: (v, k, p) => [$$(v), `${p.payload.n} trades · ${(p.payload.wr || 0).toFixed(0)}% WR`] }),
+                        React.createElement(ReferenceLine, { y: 0, stroke: C.border2 }),
+                        React.createElement(Bar, { dataKey: "pnl", radius: [3, 3, 0, 0] }, sessionStats.map((s, i) => React.createElement(Cell, { key: i, fill: s.pnl >= 0 ? C.green : C.red })))))),
+            React.createElement(Card, { title: "By Hour (UTC)", sub: "Entry time" },
+                React.createElement(ResponsiveContainer, { width: "100%", height: 180 },
+                    React.createElement(BarChart, { data: hourStats, margin: { top: 10, right: 5, left: 5, bottom: 5 } },
+                        React.createElement(XAxis, { dataKey: "h", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: h => `${h}h`, interval: 3 }),
+                        React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${v.toFixed(0)}`, width: 44 }),
+                        React.createElement(Tooltip, { contentStyle: { background: C.sidebar, border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono }, formatter: (v, k, p) => [$$(v), `${p.payload.n} trades`], labelFormatter: l => `${l}:00 UTC` }),
+                        React.createElement(ReferenceLine, { y: 0, stroke: C.border2 }),
+                        React.createElement(Bar, { dataKey: "pnl", radius: [2, 2, 0, 0] }, hourStats.map((h, i) => React.createElement(Cell, { key: i, fill: h.pnl >= 0 ? C.green : C.red, opacity: h.n === 0 ? 0.15 : 1 }))))))),
+        React.createElement(Card, { title: "Weekly Summary" },
+            React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse', fontSize: 12 } },
+                React.createElement("thead", null,
+                    React.createElement("tr", null, ['Week', 'Trades', 'Win Rate', 'Net P&L'].map(h => React.createElement("th", { key: h, style: { padding: '6px 12px', borderBottom: `1px solid ${C.border}`, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 600, textAlign: h === 'Net P&L' || h === 'Win Rate' ? 'right' : 'left' } }, h)))),
+                React.createElement("tbody", null, weeklyStats.map(w => (React.createElement("tr", { key: w.week, style: { borderBottom: `1px solid ${C.border}` } },
+                    React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 11, color: C.textDim } },
+                        w.week,
+                        " ",
+                        React.createElement("span", { style: { fontSize: 10, color: C.textFaint } },
+                            "(",
+                            w.first,
+                            ")")),
+                    React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 12 } }, w.n),
+                    React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 12, color: w.wr >= 50 ? C.green : C.red, textAlign: 'right' } },
+                        (w.wr || 0).toFixed(1),
+                        "%"),
+                    React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 12, fontWeight: 600, color: w.pnl >= 0 ? C.green : C.red, textAlign: 'right' } }, $$(w.pnl))))))))));
+}
+// ─── Full Calendar tab ────────────────────────────────────────────────────────
+function CalendarTab({ dailyPnl, trades }) {
+    const allDays = Object.keys(dailyPnl).sort();
+    if (!allDays.length)
+        return React.createElement("div", { style: { padding: 32, color: C.textDim } }, "No trades yet.");
+    const months = {};
+    for (const d of allDays) {
+        const ym = d.slice(0, 7);
+        if (!months[ym])
+            months[ym] = {};
+        months[ym][d] = dailyPnl[d];
+    }
+    const maxA = Math.max(...Object.values(dailyPnl).map(Math.abs), 1);
+    return (React.createElement("div", { style: { padding: 16, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12, alignItems: 'start' } },
+        React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 20 } }, Object.entries(months).sort().reverse().map(([ym, days]) => (React.createElement("div", { key: ym, style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: 16 } },
+            React.createElement("div", { style: { fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 12, letterSpacing: '0.04em' } }, new Date(ym + '-01T00:00:00Z').toLocaleString('en-GB', { month: 'long', year: 'numeric' })),
+            React.createElement(CalMonth, { ym: ym, days: days, maxA: maxA }))))),
+        React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+            React.createElement(Card, { title: "Daily Breakdown" },
+                React.createElement("div", { style: { maxHeight: 500, overflowY: 'auto' } },
+                    React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse', fontSize: 11 } },
+                        React.createElement("thead", null,
+                            React.createElement("tr", null, ['Date', 'Trades', 'P&L'].map(h => React.createElement("th", { key: h, style: { padding: '5px 8px', borderBottom: `1px solid ${C.border}`, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 600, textAlign: h === 'P&L' ? 'right' : 'left', position: 'sticky', top: 0, background: C.card } }, h)))),
+                        React.createElement("tbody", null, allDays.slice().reverse().map(day => {
+                            const n = trades.filter(t => isoDay(t.exitTime) === day).length;
+                            return (React.createElement("tr", { key: day, style: { borderBottom: `1px solid ${C.border}` } },
+                                React.createElement("td", { style: { padding: '6px 8px', fontFamily: C.mono, fontSize: 10, color: C.textDim } }, day),
+                                React.createElement("td", { style: { padding: '6px 8px', fontFamily: C.mono } }, n),
+                                React.createElement("td", { style: { padding: '6px 8px', fontFamily: C.mono, fontWeight: 600, color: dailyPnl[day] >= 0 ? C.green : C.red, textAlign: 'right' } }, $$(dailyPnl[day]))));
+                        }))))))));
+}
+function CalMonth({ ym, days, maxA }) {
+    const d0 = new Date(ym + '-01T00:00:00Z');
+    const fdow = d0.getUTCDay() === 0 ? 6 : d0.getUTCDay() - 1;
+    const dim = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 0)).getUTCDate();
+    const today = new Date().toISOString().slice(0, 10);
+    return (React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 } },
+        ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => React.createElement("div", { key: i, style: { textAlign: 'center', fontSize: 9, color: C.textFaint, fontWeight: 700, paddingBottom: 4 } }, d)),
+        Array.from({ length: fdow }, (_, i) => React.createElement("div", { key: `e${i}` })),
+        Array.from({ length: dim }, (_, i) => {
+            var _a;
+            const day = i + 1, key = `${ym}-${String(day).padStart(2, '0')}`;
+            const p = (_a = days[key]) !== null && _a !== void 0 ? _a : null;
+            return (React.createElement("div", { key: day, title: p !== null ? `${key}: ${$$(p)}` : '', style: { aspectRatio: '1', borderRadius: 4, background: p !== null ? calCol(p, maxA) : C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: p !== null ? 'rgba(255,255,255,0.8)' : C.textFaint, border: today === key ? `1px solid ${C.teal}` : `1px solid ${C.border}`, cursor: p !== null ? 'default' : 'default', fontFamily: C.mono } }, day));
+        })));
+}
+// ─── Trades Tab ───────────────────────────────────────────────────────────────
+function TradesTab({ trades, sk, sd, doSort, onEdit }) {
+    const SH = ({ k, children, align = 'left' }) => (React.createElement("th", { style: { padding: '10px 12px', borderBottom: `1px solid ${C.border}`, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 600, cursor: 'pointer', textAlign: align, whiteSpace: 'nowrap', background: C.sidebar }, onClick: () => doSort(k) },
+        React.createElement("span", { style: { display: 'inline-flex', alignItems: 'center', gap: 3 } },
+            children,
+            sk === k && (sd === 'asc' ? React.createElement(IcoUp, null) : React.createElement(IcoDn, null)))));
+    return (React.createElement("div", { style: { padding: 16 } },
+        React.createElement("p", { style: { fontSize: 11, color: C.textDim, marginBottom: 12 } }, "Click any row to add notes, setup tags, and rating."),
+        React.createElement("div", { style: { overflowX: 'auto', background: C.card, border: `1px solid ${C.border}`, borderRadius: 6 } },
+            React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse', fontSize: 12 } },
+                React.createElement("thead", null,
+                    React.createElement("tr", null,
+                        React.createElement(SH, { k: "exitTime" }, "Closed"),
+                        React.createElement(SH, { k: "symbol" }, "Symbol"),
+                        React.createElement(SH, { k: "direction" }, "Side"),
+                        React.createElement("th", { style: { padding: '10px 12px', borderBottom: `1px solid ${C.border}`, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 600, background: C.sidebar } }, "Setup"),
+                        React.createElement("th", { style: { padding: '10px 12px', borderBottom: `1px solid ${C.border}`, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 600, background: C.sidebar } }, "Rating"),
+                        React.createElement(SH, { k: "qty", align: "right" }, "Qty"),
+                        React.createElement(SH, { k: "entryPrice", align: "right" }, "Entry"),
+                        React.createElement(SH, { k: "exitPrice", align: "right" }, "Exit"),
+                        React.createElement(SH, { k: "pnlPctNet", align: "right" }, "%"),
+                        React.createElement(SH, { k: "pnl", align: "right" }, "Gross"),
+                        React.createElement(SH, { k: "fees", align: "right" }, "Fees"),
+                        React.createElement(SH, { k: "pnlNet", align: "right" }, "Net"))),
+                React.createElement("tbody", null, trades.map(t => (React.createElement("tr", { key: t.id, onClick: () => onEdit(t), style: { borderBottom: `1px solid ${C.border}`, cursor: 'pointer', transition: 'background 0.1s' }, onMouseEnter: e => e.currentTarget.style.background = C.cardB, onMouseLeave: e => e.currentTarget.style.background = 'transparent' },
+                    React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.exitTime)),
+                    React.createElement("td", { style: { padding: '9px 12px', fontWeight: 600, color: C.text } }, t.symbol),
+                    React.createElement("td", { style: { padding: '9px 12px' } },
+                        React.createElement("span", { style: { fontSize: 9, padding: '3px 7px', borderRadius: 3, background: t.direction === 'long' ? C.greenDim : C.redDim, color: t.direction === 'long' ? C.green : C.red, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' } }, t.direction)),
+                    React.createElement("td", { style: { padding: '9px 12px' } }, t.setupTags.length ? React.createElement("div", { style: { display: 'flex', gap: 3, flexWrap: 'wrap' } }, t.setupTags.map(s => React.createElement("span", { key: s, style: { fontSize: 9, padding: '2px 6px', background: C.tealDim, border: `1px solid ${C.tealBorder}`, color: C.teal, borderRadius: 2, fontWeight: 600, letterSpacing: '0.06em' } }, s))) : React.createElement("span", { style: { color: C.textFaint, fontSize: 10 } }, "\u2014")),
+                    React.createElement("td", { style: { padding: '9px 12px' } }, t.rating > 0 ? React.createElement("span", { style: { color: C.yellow, letterSpacing: 1 } },
+                        '★'.repeat(t.rating),
+                        '☆'.repeat(5 - t.rating)) : React.createElement("span", { style: { color: C.textFaint, fontSize: 10 } }, "\u2014")),
+                    React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right' } }, t.qty),
+                    React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right' } },
+                        "$",
+                        t.entryPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })),
+                    React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right' } },
+                        "$",
+                        t.exitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })),
+                    React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: t.pnlNet >= 0 ? C.green : C.red } }, pct(t.pnlPctNet)),
+                    React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: t.pnl >= 0 ? '#4a7a5a' : '#7a4a4a' } }, $$(t.pnl)),
+                    React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: C.yellow } },
+                        "\u2212",
+                        $$(t.fees).replace('-', '')),
+                    React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 12, textAlign: 'right', color: t.pnlNet >= 0 ? C.green : C.red, fontWeight: 700 } }, $$(t.pnlNet))))))))));
+}
+// ─── Prop Firm Tab ────────────────────────────────────────────────────────────
+function PropFirmTab({ ps, sett, setSett, trades }) {
+    const sc = ps.status === 'pass' ? C.green : ps.status === 'fail' ? C.red : C.teal;
+    const [now, setNow] = useState(() => new Date());
+    useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
+    const pad = n => String(n).padStart(2, '0');
+    const todayUTC = now.toISOString().slice(0, 10);
+    const sr = 86400 - (now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds());
+    const todayPnl = useMemo(() => trades.filter(t => isoDay(t.exitTime) === todayUTC).reduce((s, t) => s + t.pnlNet, 0), [trades, todayUTC]);
+    const prevEq = useMemo(() => { const { dce, sz } = ps; const days = Object.keys(dce).sort(); const ti = days.indexOf(todayUTC); if (ti > 0)
+        return dce[days[ti - 1]]; if (ti === -1 && days.length)
+        return dce[days[days.length - 1]]; return sz; }, [ps, todayUTC]);
+    const cud = Math.max(0, ps.sz - ps.equity), mddp = Math.min(100, cud / ps.mddl * 100);
+    const dlt = todayPnl < 0 ? Math.abs(todayPnl) : 0, dlp = Math.min(100, dlt / ps.dll * 100);
+    const barCol = (p) => p >= 100 ? C.red : p >= 75 ? C.yellow : p > 0 ? C.teal : '#1e3a50';
+    return (React.createElement("div", { style: { padding: 16, display: 'flex', flexDirection: 'column', gap: 12 } },
+        React.createElement("div", { style: { background: C.card, border: `1px solid ${C.tealBorder}`, borderRadius: 6, padding: 20, display: 'flex', gap: 32, flexWrap: 'wrap' } },
+            React.createElement("div", { style: { display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 160 } },
+                React.createElement("div", { style: { fontSize: 10, color: C.textFaint, letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 6 } }, todayUTC),
+                React.createElement("div", { style: { fontFamily: C.mono, fontSize: 38, fontWeight: 700, color: C.text, lineHeight: 1, letterSpacing: '-0.02em' } },
+                    pad(now.getUTCHours()),
+                    ":",
+                    pad(now.getUTCMinutes()),
+                    ":",
+                    pad(now.getUTCSeconds()),
+                    " ",
+                    React.createElement("span", { style: { fontSize: 14, color: C.textDim } }, "UTC")),
+                React.createElement("div", { style: { fontFamily: C.mono, fontSize: 11, color: C.textFaint, marginTop: 8 } },
+                    "resets in ",
+                    pad(Math.floor(sr / 3600)),
+                    ":",
+                    pad(Math.floor(sr % 3600 / 60)),
+                    ":",
+                    pad(sr % 60))),
+            React.createElement("div", { style: { flex: 1, minWidth: 280, borderLeft: `1px solid ${C.border}`, paddingLeft: 28 } },
+                React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 } },
+                    React.createElement("span", { style: { fontSize: 10, color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 } }, "Today's P&L"),
+                    React.createElement("span", { style: { fontSize: 10, color: C.textFaint, fontFamily: C.mono } },
+                        "vs ",
+                        $$(prevEq))),
+                React.createElement("div", { style: { fontFamily: C.mono, fontSize: 32, fontWeight: 700, color: todayPnl > 0 ? C.green : todayPnl < 0 ? C.red : C.textFaint, marginBottom: 16 } }, todayPnl === 0 ? '—' : $$(todayPnl)),
+                [['Daily Loss (3%)', dlt, dlp, ps.dll], ['Max Drawdown (6%)', cud, mddp, ps.mddl]].map(([lbl, val, p, lim]) => (React.createElement("div", { key: lbl, style: { marginBottom: 14 } },
+                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 5 } },
+                        React.createElement("span", { style: { fontSize: 10, fontWeight: 600, color: C.textDim, letterSpacing: '0.08em', textTransform: 'uppercase' } }, lbl),
+                        React.createElement("span", { style: { fontFamily: C.mono, fontSize: 11 } },
+                            val > 0 ? React.createElement("span", { style: { color: barCol(p) } },
+                                "\u2212",
+                                $$(val)) : React.createElement("span", { style: { color: C.textFaint } }, lbl.includes('Daily') ? 'no loss' : 'no DD'),
+                            React.createElement("span", { style: { color: C.textFaint } },
+                                " / ",
+                                $$(lim, 0)))),
+                    React.createElement("div", { style: { height: 7, background: C.border, borderRadius: 3, overflow: 'hidden' } },
+                        React.createElement("div", { style: { height: '100%', width: `${p}%`, background: barCol(p), borderRadius: 3, transition: 'width 0.3s' } })),
+                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginTop: 3 } },
+                        React.createElement("span", { style: { fontSize: 9, color: C.textFaint } }, val === 0 ? (lbl.includes('Daily') ? 'in profit — not counting' : 'above ' + $$(ps.sz, 0) + ' — not counting') : `${(p || 0).toFixed(1)}% used`),
+                        val > 0 && React.createElement("span", { style: { fontFamily: C.mono, fontSize: 10, color: barCol(p) } },
+                            $$(lim - val),
+                            " left"))))))),
+        React.createElement("div", { style: { background: C.card, border: `1px solid ${sc}`, borderRadius: 6, padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 } },
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 10, color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase' } },
+                    "Simulation on ",
+                    $$(ps.sz, 0),
+                    " account"),
+                React.createElement("div", { style: { fontFamily: C.mono, fontSize: 24, fontWeight: 700, color: sc, marginTop: 6, letterSpacing: '0.02em' } }, ps.status === 'pass' ? '✓ PROFIT TARGET HIT' : ps.status === 'fail' ? '✗ ACCOUNT BUSTED' : '● IN PROGRESS'),
+                ps.breach && React.createElement("div", { style: { fontSize: 12, color: C.textDim, marginTop: 10, lineHeight: 1.6 } },
+                    "Breached ",
+                    React.createElement("strong", { style: { color: C.red } }, ps.breach.rule),
+                    " at trade #",
+                    ps.breach.at,
+                    " (",
+                    ps.breach.day,
+                    "). ",
+                    ps.breach.detail,
+                    "."),
+                ps.hit && React.createElement("div", { style: { fontSize: 12, color: C.green, marginTop: 10, lineHeight: 1.6 } },
+                    "Profit target reached at trade #",
+                    ps.hit.at,
+                    " (",
+                    ps.hit.day,
+                    ") \u2014 equity ",
+                    $$(ps.hit.equity),
+                    ".")),
+            React.createElement("div", { style: { textAlign: 'right' } },
+                React.createElement("div", { style: { fontSize: 10, color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase' } },
+                    "Your payout (",
+                    sett.propProfitSplitPct,
+                    "%)"),
+                React.createElement("div", { style: { fontFamily: C.mono, fontSize: 28, fontWeight: 700, color: ps.payout > 0 ? C.green : C.textFaint, marginTop: 6 } }, $$(ps.payout)),
+                React.createElement("div", { style: { fontSize: 10, color: C.textDim, marginTop: 4 } },
+                    "from ",
+                    $$(ps.fp),
+                    " gross profit"))),
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 } },
+            React.createElement(Stat, { label: "Account equity", value: $$(ps.equity), sub: `${pct(ps.fp / ps.sz * 100)} from start`, accent: ps.fp >= 0 ? C.green : C.red }),
+            React.createElement(Stat, { label: "Profit target", value: $$(ps.pt, 0), sub: `${sett.propProfitTargetPct}% of account` }),
+            React.createElement(Stat, { label: "Daily loss limit", value: $$(ps.dll, 0), sub: `${sett.propDailyLossPct}% per day` }),
+            React.createElement(Stat, { label: "Max drawdown", value: $$(ps.mddl, 0), sub: `Floor ${$$(ps.floor, 0)}`, accent: C.red }),
+            React.createElement(Stat, { label: "Progress", value: `${(ps.progPct || 0).toFixed(1)}%`, sub: "towards profit target", accent: C.teal })),
+        React.createElement(Card, { title: "Account Equity Simulation", sub: `${$$(ps.sz, 0)} starting · Floor ${$$(ps.floor, 0)} · Target ${$$(ps.sz + ps.pt, 0)}` },
+            React.createElement(ResponsiveContainer, { width: "100%", height: 260 },
+                React.createElement(AreaChart, { data: ps.curve, margin: { top: 10, right: 20, left: 5, bottom: 5 } },
+                    React.createElement("defs", null,
+                        React.createElement("linearGradient", { id: "propGrad", x1: "0", y1: "0", x2: "0", y2: "1" },
+                            React.createElement("stop", { offset: "5%", stopColor: sc, stopOpacity: 0.2 }),
+                            React.createElement("stop", { offset: "95%", stopColor: sc, stopOpacity: 0 }))),
+                    React.createElement(XAxis, { dataKey: "idx", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false }),
+                    React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${(v / 1000).toFixed(2)}k`, width: 52, domain: [Math.min(ps.floor - 50, ps.equity - 50), Math.max(ps.sz + ps.pt + 50, ps.equity + 50)] }),
+                    React.createElement(Tooltip, { contentStyle: { background: C.sidebar, border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono }, formatter: v => [$$(v), 'Equity'], labelFormatter: l => `Trade #${l}` }),
+                    React.createElement(ReferenceLine, { y: ps.sz, stroke: C.border2, strokeDasharray: "3 3", label: { value: 'Start', fill: C.textFaint, fontSize: 9, position: 'insideTopRight' } }),
+                    React.createElement(ReferenceLine, { y: ps.floor, stroke: C.red, strokeDasharray: "3 3", label: { value: 'DD Floor', fill: C.red, fontSize: 9, position: 'insideTopRight' } }),
+                    React.createElement(ReferenceLine, { y: ps.sz + ps.pt, stroke: C.green, strokeDasharray: "3 3", label: { value: 'Target', fill: C.green, fontSize: 9, position: 'insideTopRight' } }),
+                    React.createElement(Area, { type: "monotone", dataKey: "equity", stroke: sc, strokeWidth: 2, fill: "url(#propGrad)", dot: false })))),
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
+            React.createElement(Card, { title: "Trading Days" },
+                React.createElement("div", { style: { display: 'flex', gap: 0, marginTop: 4 } }, [['Total', ps.days, '#e8f4ff'], [`Green`, ps.greenDays, C.green], [`Red`, ps.redDays, C.red]].map(([l, n, col]) => (React.createElement("div", { key: l, style: { flex: 1, textAlign: 'center' } },
+                    React.createElement("div", { style: { fontFamily: C.mono, fontSize: 36, fontWeight: 700, color: col, lineHeight: 1 } }, n),
+                    React.createElement("div", { style: { fontSize: 10, color: C.textDim, marginTop: 6, letterSpacing: '0.08em', textTransform: 'uppercase' } }, l)))))),
+            React.createElement(Card, { title: "Breakout Rules" },
+                React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, [['Account size ($)', 'propAccountSize', 1], ['Profit target (%)', 'propProfitTargetPct', 0.1], ['Daily loss (%)', 'propDailyLossPct', 0.1], ['Max DD (%)', 'propMaxDDPct', 0.1], ['Split (%)', 'propProfitSplitPct', 1]].map(([l, k, step]) => (React.createElement("label", { key: k, style: { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.textDim, fontWeight: 600 } },
+                    l,
+                    React.createElement("input", { type: "number", step: step, value: sett[k], onChange: e => setSett({ ...sett, [k]: parseFloat(e.target.value) || 0 }), style: { background: '#0d1f30', border: `1px solid ${C.border2}`, color: C.text, padding: '7px 9px', fontFamily: C.mono, fontSize: 12, borderRadius: 3, outline: 'none' } })))))))));
+}
+// ─── Settings Tab ─────────────────────────────────────────────────────────────
+function SettingsTab({ sett, setSett }) {
+    return (React.createElement("div", { style: { padding: 16, maxWidth: 600 } },
+        React.createElement(Card, { title: "Account Settings" },
+            React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 } }, [['Starting balance ($)', 'startingBalance', 1], ['Risk per trade ($)', 'riskPerTrade', 0.5], ['Fee per leg (%)', 'feeRate', 0.01]].map(([l, k, step]) => (React.createElement("label", { key: k, style: { display: 'flex', flexDirection: 'column', gap: 6, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.textDim, fontWeight: 600 } },
+                l,
+                React.createElement("input", { type: "number", step: step, value: sett[k], onChange: e => setSett({ ...sett, [k]: parseFloat(e.target.value) || 0 }), style: { background: '#0d1f30', border: `1px solid ${C.border2}`, color: C.text, padding: '9px 11px', fontFamily: C.mono, fontSize: 13, borderRadius: 3, outline: 'none' } }))))),
+            React.createElement("div", { style: { fontSize: 11, color: C.textDim, marginTop: 14, lineHeight: 1.6 } },
+                "Fee per leg is charged on both entry and exit notional. Round-trip = ",
+                (sett.feeRate * 2).toFixed(2),
+                "%."))));
 }
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
 function EditModal({ trade, meta, onSave, onClose }) {
@@ -628,617 +904,72 @@ function EditModal({ trade, meta, onSave, onClose }) {
     const [rating, setRating] = useState(meta.rating || 0);
     const [hover, setHover] = useState(0);
     const tog = (arr, set, tag) => set(arr.includes(tag) ? arr.filter(t => t !== tag) : [...arr, tag]);
-    const ratingLabel = ['', 'Poor', 'Below avg', 'Average', 'Good', 'A+ Setup'];
-    return (React.createElement("div", { style: S.overlay, onClick: onClose },
-        React.createElement("div", { style: S.modal, onClick: e => e.stopPropagation() },
-            React.createElement("div", { style: S.modalHead },
+    const rl = ['', 'Poor', 'Below avg', 'Average', 'Good', 'A+ Setup'];
+    return (React.createElement("div", { style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }, onClick: onClose },
+        React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border2}`, width: '100%', maxWidth: 560, maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: 8 }, onClick: e => e.stopPropagation() },
+            React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '18px 22px 14px', borderBottom: `1px solid ${C.border}` } },
                 React.createElement("div", null,
-                    React.createElement("div", { style: S.modalTitle },
+                    React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: C.text } },
                         trade.symbol,
                         " ",
-                        React.createElement("span", { style: { color: trade.direction === 'long' ? '#7fb069' : '#d96459' } }, trade.direction.toUpperCase())),
-                    React.createElement("div", { style: S.modalSub },
-                        fmtDate(trade.entryTime),
+                        React.createElement("span", { style: { color: trade.direction === 'long' ? C.green : C.red } }, trade.direction.toUpperCase())),
+                    React.createElement("div", { style: { fontSize: 11, color: C.textDim, marginTop: 3, fontFamily: C.mono } },
+                        fdate(trade.entryTime),
                         " \u2192 ",
-                        fmtDate(trade.exitTime),
+                        fdate(trade.exitTime),
                         " ",
-                        React.createElement("span", { style: { color: trade.pnlNet >= 0 ? '#7fb069' : '#d96459', marginLeft: 10 } }, fmt$(trade.pnlNet)))),
-                React.createElement("button", { style: S.modalX, onClick: onClose },
-                    React.createElement(XIcon, { size: 16 }))),
-            React.createElement("div", { style: S.modalBody },
-                React.createElement("div", { style: S.msec },
-                    React.createElement("div", { style: S.mlabel }, "Rating"),
+                        React.createElement("span", { style: { color: trade.pnlNet >= 0 ? C.green : C.red, marginLeft: 8 } }, $$(trade.pnlNet)))),
+                React.createElement("button", { onClick: onClose, style: { background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 4 } },
+                    React.createElement(IcoX, { s: 16 }))),
+            React.createElement("div", { style: { flex: 1, overflowY: 'auto', padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 18 } },
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700, marginBottom: 8 } }, "Rating"),
                     React.createElement("div", { style: { display: 'flex', gap: 6, alignItems: 'center' } },
-                        [1, 2, 3, 4, 5].map(n => (React.createElement("button", { key: n, style: { background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: (hover || rating) >= n ? '#c9a96b' : '#3a372f', fontSize: 22 }, onMouseEnter: () => setHover(n), onMouseLeave: () => setHover(0), onClick: () => setRating(rating === n ? 0 : n) }, "\u2605"))),
-                        rating > 0 && React.createElement("span", { style: { color: '#6a665b', fontSize: 11, marginLeft: 4 } }, ratingLabel[rating]))),
-                React.createElement("div", { style: S.msec },
-                    React.createElement("div", { style: S.mlabel }, "Setup type"),
-                    React.createElement("div", { style: S.tagGrid }, SETUP_TAGS.map(tag => (React.createElement("button", { key: tag, onClick: () => tog(setupTags, setSetupTags, tag), style: { ...S.tagBtn, ...(setupTags.includes(tag) ? S.tagSetup : {}) } }, tag))))),
-                React.createElement("div", { style: S.msec },
-                    React.createElement("div", { style: S.mlabel }, "Execution tags"),
-                    React.createElement("div", { style: S.tagGrid }, EXEC_TAGS.map(tag => (React.createElement("button", { key: tag, onClick: () => tog(execTags, setExecTags, tag), style: { ...S.tagBtn, ...(execTags.includes(tag) ? (tag === 'Perfect Execution' ? S.tagGood : S.tagBad) : {}) } }, tag))))),
-                React.createElement("div", { style: S.msec },
-                    React.createElement("div", { style: S.mlabel }, "Notes"),
-                    React.createElement("textarea", { value: note, onChange: e => setNote(e.target.value), placeholder: "What did you see? What did you miss? Was it an A+ setup?", style: S.textarea, rows: 4 }))),
-            React.createElement("div", { style: S.modalFoot },
-                React.createElement("button", { style: S.btnGhost, onClick: onClose }, "Cancel"),
-                React.createElement("button", { style: S.btnPrimary, onClick: () => onSave({ note, setupTags, execTags, rating }) }, "Save")))));
+                        [1, 2, 3, 4, 5].map(n => (React.createElement("button", { key: n, style: { background: 'none', border: 'none', cursor: 'pointer', padding: 2, fontSize: 24, color: (hover || rating) >= n ? C.yellow : '#2a4a60', lineHeight: 1 }, onMouseEnter: () => setHover(n), onMouseLeave: () => setHover(0), onClick: () => setRating(rating === n ? 0 : n) }, "\u2605"))),
+                        rating > 0 && React.createElement("span", { style: { fontSize: 11, color: C.textDim, marginLeft: 4 } }, rl[rating]))),
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700, marginBottom: 8 } }, "Setup Type"),
+                    React.createElement("div", { style: { display: 'flex', flexWrap: 'wrap', gap: 7 } }, SETUPS.map(tag => React.createElement("button", { key: tag, onClick: () => tog(setupTags, setSetupTags, tag), style: { background: setupTags.includes(tag) ? C.tealDim : 'transparent', border: `1px solid ${setupTags.includes(tag) ? C.tealBorder : C.border2}`, color: setupTags.includes(tag) ? C.teal : C.textDim, padding: '5px 12px', fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 4, fontWeight: setupTags.includes(tag) ? 700 : 400, transition: 'all 0.15s' } }, tag)))),
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700, marginBottom: 8 } }, "Execution Tags"),
+                    React.createElement("div", { style: { display: 'flex', flexWrap: 'wrap', gap: 7 } }, EXECS.map(tag => {
+                        const active = execTags.includes(tag), good = tag === 'Perfect Execution';
+                        return (React.createElement("button", { key: tag, onClick: () => tog(execTags, setExecTags, tag), style: { background: active ? (good ? C.greenDim : C.redDim) : 'transparent', border: `1px solid ${active ? (good ? 'rgba(38,201,138,0.3)' : 'rgba(224,92,92,0.3)') : C.border2}`, color: active ? (good ? C.green : C.red) : C.textDim, padding: '5px 11px', fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 4, fontWeight: active ? 700 : 400, transition: 'all 0.15s' } }, tag));
+                    }))),
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700, marginBottom: 8 } }, "Notes"),
+                    React.createElement("textarea", { value: note, onChange: e => setNote(e.target.value), placeholder: "What did you see? What did you miss? A+ or B setup?", style: { background: '#0d1f30', border: `1px solid ${C.border2}`, color: C.text, padding: '10px 12px', fontSize: 12, fontFamily: 'Inter, sans-serif', borderRadius: 4, outline: 'none', resize: 'vertical', lineHeight: 1.6, width: '100%' }, rows: 4 }))),
+            React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 22px', borderTop: `1px solid ${C.border}` } },
+                React.createElement("button", { onClick: onClose, style: { padding: '8px 18px', background: 'transparent', border: `1px solid ${C.border2}`, color: C.textDim, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 4 } }, "Cancel"),
+                React.createElement("button", { onClick: () => onSave({ note, setupTags, execTags, rating }), style: { padding: '8px 20px', background: C.teal, border: 'none', color: '#001a14', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 4, letterSpacing: '0.04em' } }, "Save")))));
 }
 // ─── Empty State ──────────────────────────────────────────────────────────────
-function EmptyState({ onPick, settings, onSettings }) {
-    return (React.createElement("div", { style: S.empty },
-        React.createElement("div", { style: { fontSize: 40, color: '#c9a96b', marginBottom: 16, fontFamily: 'JetBrains Mono, monospace' } }, "\u25E2\u25E3"),
-        React.createElement("h2", { style: { fontFamily: 'Fraunces, serif', fontSize: 28, color: '#e8e6df', margin: '0 0 12px', fontWeight: 600 } }, "No trades yet"),
-        React.createElement("p", { style: { fontSize: 13, color: '#8a857a', maxWidth: 380, margin: '0 auto 32px', lineHeight: 1.6 } }, "Export your TradingView paper trading order history as CSV and import it here."),
-        React.createElement("div", { style: { textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 } }, ['Open the Trading Panel in TradingView, click your account name', 'Choose Export data…, select History, click Export', 'Import the downloaded CSV here'].map((s, i) => (React.createElement("div", { key: i, style: { display: 'flex', gap: 14, fontSize: 12, color: '#8a857a', lineHeight: 1.5 } },
-            React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#c9a96b', minWidth: 24 } },
-                "0",
-                i + 1),
-            s)))),
-        React.createElement("button", { style: S.btnPrimary, onClick: onPick },
-            React.createElement(Upload, null),
-            " Choose CSV file"),
-        React.createElement("div", { style: { marginTop: 28, paddingTop: 24, borderTop: '1px solid #1f1d18' } },
-            React.createElement("label", { style: S.label },
-                "Starting balance ($)",
-                React.createElement("input", { type: "number", value: settings.startingBalance, onChange: e => onSettings({ ...settings, startingBalance: parseFloat(e.target.value) || 0 }), style: S.input })))));
-}
-// ─── Shared ───────────────────────────────────────────────────────────────────
-function SC({ label, value, sub, accent, mono = true }) {
-    return (React.createElement("div", { style: S.statCard },
-        React.createElement("div", { style: S.statLabel }, label),
-        React.createElement("div", { style: { ...S.statValue, ...(mono ? { fontFamily: 'JetBrains Mono, monospace' } : {}), color: accent || '#e8e6df' } }, value),
-        sub && React.createElement("div", { style: S.statSub }, sub)));
-}
-function RuleBar({ label, value, limit, pct, color, inverted }) {
-    const c = Math.max(0, Math.min(100, pct));
-    return (React.createElement("div", null,
-        React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 6 } },
-            React.createElement("span", { style: S.dirBarLabel }, label),
-            React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#a8a399' } },
-                React.createElement("span", { style: { color } }, value),
-                " ",
-                React.createElement("span", { style: { color: '#5a564c' } },
-                    "/ ",
-                    limit))),
-        React.createElement("div", { style: S.dirBarTrack },
-            React.createElement("div", { style: { ...S.dirBarFill, width: `${c}%`, background: color } })),
-        React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginTop: 4 } },
-            React.createElement("span", { style: S.dirBarSub }, inverted ? 'progress' : 'used'),
-            React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 600, color } },
-                c.toFixed(1),
-                "%"))));
-}
-function DirBar({ label, count, wr, color }) {
-    return (React.createElement("div", null,
-        React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 8 } },
-            React.createElement("span", { style: S.dirBarLabel }, label),
-            React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 14, color: '#e8e6df' } }, count)),
-        React.createElement("div", { style: S.dirBarTrack },
-            React.createElement("div", { style: { ...S.dirBarFill, width: `${wr}%`, background: color } })),
-        React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginTop: 6 } },
-            React.createElement("span", { style: S.dirBarSub }, "win rate"),
-            React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 600, color } },
-                wr.toFixed(1),
-                "%"))));
-}
-// ─── Overview ─────────────────────────────────────────────────────────────────
-function Overview({ stats, settings }) {
-    const pc = stats.totalPnl >= 0 ? '#7fb069' : '#d96459';
-    const gc = stats.totalGross >= 0 ? '#7fb069' : '#d96459';
-    const fip = stats.totalGross !== 0 ? stats.totalFees / Math.abs(stats.totalGross) * 100 : 0;
-    return (React.createElement("div", { style: S.content },
-        React.createElement("div", { style: S.statsGrid },
-            React.createElement(SC, { label: "Net P&L", value: fmt$(stats.totalPnl), sub: `${fmtPct(stats.totalPnl / settings.startingBalance * 100)} on balance`, accent: pc }),
-            React.createElement(SC, { label: "Equity", value: fmt$(stats.finalEq), sub: `Peak ${fmt$(stats.peak)}` }),
-            React.createElement(SC, { label: "Win rate", value: `${stats.winRate.toFixed(1)}%`, sub: `${stats.wins}W · ${stats.losses}L${stats.breakeven ? ` · ${stats.breakeven}BE` : ''}` }),
-            React.createElement(SC, { label: "Profit factor", value: isFinite(stats.pf) ? stats.pf.toFixed(2) : '∞', sub: `${fmt$(stats.gW, 0)} / ${fmt$(stats.gL, 0)}` }),
-            React.createElement(SC, { label: "Avg R:R", value: stats.avgRR.toFixed(2), sub: `Win ${fmt$(stats.avgWin)} · Loss ${fmt$(stats.avgLoss)}` }),
-            React.createElement(SC, { label: "Expectancy", value: fmt$(stats.expectancy), sub: "per trade, post-fee" }),
-            React.createElement(SC, { label: "Max drawdown", value: fmt$(stats.maxDD), sub: `${stats.maxDDPct.toFixed(2)}% from peak`, accent: "#d96459" }),
-            React.createElement(SC, { label: "Trades", value: String(stats.n), sub: `${stats.longs} long · ${stats.shorts} short` })),
-        React.createElement("div", { style: S.feeCard },
-            React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 12 } },
-                React.createElement("div", null,
-                    React.createElement("div", { style: S.chartTitle }, "Fee impact"),
-                    React.createElement("div", { style: S.chartSub },
-                        settings.feeRate,
-                        "% per leg \u00B7 ",
-                        (settings.feeRate * 2).toFixed(2),
-                        "% round-trip")),
-                React.createElement("div", { style: S.feeBadge },
-                    fip.toFixed(1),
-                    "% of gross")),
-            React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 16, padding: '12px 0', borderTop: '1px solid #1f1d18', borderBottom: '1px solid #1f1d18', flexWrap: 'wrap' } },
-                React.createElement("div", { style: { flex: 1, minWidth: 80 } },
-                    React.createElement("div", { style: S.feeLabel }, "Gross P&L"),
-                    React.createElement("div", { style: { ...S.feeVal, color: gc } }, fmt$(stats.totalGross))),
-                React.createElement("div", { style: { fontFamily: 'JetBrains Mono, monospace', color: '#3a372f', fontSize: 18 } }, "\u2192"),
-                React.createElement("div", { style: { flex: 1, minWidth: 80 } },
-                    React.createElement("div", { style: S.feeLabel }, "Total fees"),
-                    React.createElement("div", { style: { ...S.feeVal, color: '#c9a96b' } },
-                        "\u2212",
-                        fmt$(stats.totalFees).replace('-', ''))),
-                React.createElement("div", { style: { fontFamily: 'JetBrains Mono, monospace', color: '#3a372f', fontSize: 18 } }, "="),
-                React.createElement("div", { style: { flex: 1, minWidth: 80 } },
-                    React.createElement("div", { style: S.feeLabel }, "Net P&L"),
-                    React.createElement("div", { style: { ...S.feeVal, color: pc } }, fmt$(stats.totalPnl)))),
-            React.createElement("div", { style: { marginTop: 14, fontSize: 11, color: '#6a665b', lineHeight: 1.6 } },
-                "Avg ",
-                React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', color: '#a8a399' } }, fmt$(stats.avgFee)),
-                " per trade \u00B7 Gross equity would be ",
-                React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', color: '#a8a399' } }, fmt$(stats.finalEqG)))),
-        React.createElement("div", { style: S.card },
-            React.createElement("div", { style: { marginBottom: 16 } },
-                React.createElement("div", { style: S.chartTitle }, "Equity curve"),
-                React.createElement("div", { style: S.chartSub }, "Net (solid) vs gross (dashed)")),
-            React.createElement(ResponsiveContainer, { width: "100%", height: 280 },
-                React.createElement(LineChart, { data: stats.curve, margin: { top: 10, right: 20, left: 10, bottom: 10 } },
-                    React.createElement(XAxis, { dataKey: "idx", stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' } }),
-                    React.createElement(YAxis, { stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' }, tickFormatter: v => `$${(v / 1000).toFixed(1)}k` }),
-                    React.createElement(Tooltip, { contentStyle: { background: '#1a1816', border: '1px solid #2a2823', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }, labelStyle: { color: '#8a857a' }, formatter: (v, k) => [fmt$(v), k === 'equity' ? 'Net' : 'Gross'], labelFormatter: l => `Trade #${l}` }),
-                    React.createElement(ReferenceLine, { y: settings.startingBalance, stroke: "#3a372f", strokeDasharray: "2 4" }),
-                    React.createElement(Line, { type: "monotone", dataKey: "equityGross", stroke: "#5a564c", strokeWidth: 1, strokeDasharray: "3 3", dot: false }),
-                    React.createElement(Line, { type: "monotone", dataKey: "equity", stroke: pc, strokeWidth: 1.5, dot: false }))))));
-}
-// ─── Analytics ────────────────────────────────────────────────────────────────
-function Analytics({ stats, sessionStats, hourStats, setupStats, execStats, weeklyStats }) {
-    return (React.createElement("div", { style: S.content },
-        React.createElement("div", { style: S.twoCol },
-            React.createElement("div", { style: S.card },
-                React.createElement("div", { style: S.chartTitle }, "Long vs Short"),
-                React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 20, marginTop: 16 } },
-                    React.createElement(DirBar, { label: "LONG", count: stats.longs, wr: stats.longsWR, color: "#7fb069" }),
-                    React.createElement(DirBar, { label: "SHORT", count: stats.shorts, wr: stats.shortsWR, color: "#d96459" }))),
-            React.createElement("div", { style: S.card },
-                React.createElement("div", { style: S.chartTitle }, "Streaks"),
-                React.createElement("div", { style: { display: 'flex', gap: 24, marginTop: 16 } },
-                    React.createElement("div", { style: { flex: 1 } },
-                        React.createElement("div", { style: S.streakLabel }, "Longest win streak"),
-                        React.createElement("div", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 32, fontWeight: 500, color: '#7fb069' } }, stats.lW)),
-                    React.createElement("div", { style: { flex: 1 } },
-                        React.createElement("div", { style: S.streakLabel }, "Longest loss streak"),
-                        React.createElement("div", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 32, fontWeight: 500, color: '#d96459' } }, stats.lL))))),
-        React.createElement("div", { style: S.card },
-            React.createElement("div", { style: S.chartTitle }, "Performance by setup"),
-            React.createElement("div", { style: S.chartSub }, "Click any trade to tag it with a setup type"),
-            setupStats.filter(s => s.tag !== 'Untagged').length === 0 ? (React.createElement("div", { style: { ...S.helpText, marginTop: 12 } }, "No setup tags yet \u2014 click any trade row in the Trades tab.")) : (React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 } }, setupStats.filter(s => s.tag !== 'Untagged').map(s => (React.createElement("div", { key: s.tag, style: { display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' } },
-                React.createElement("div", { style: { fontSize: 10, letterSpacing: '0.12em', color: '#c9a96b', background: 'rgba(201,169,107,0.08)', border: '1px solid rgba(201,169,107,0.2)', padding: '4px 10px', borderRadius: 2, minWidth: 80, textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 } }, s.tag),
-                React.createElement("div", { style: { display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' } },
-                    React.createElement("span", { style: { fontSize: 10, color: '#6a665b' } },
-                        s.n,
-                        " trades"),
-                    React.createElement("span", { style: { color: s.wr >= 50 ? '#7fb069' : '#d96459', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 } },
-                        s.wr.toFixed(0),
-                        "% WR"),
-                    React.createElement("span", { style: { color: s.pnl >= 0 ? '#7fb069' : '#d96459', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 } }, fmt$(s.pnl)),
-                    React.createElement("span", { style: { color: '#6a665b', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 } },
-                        fmt$(s.avg),
-                        " avg")),
-                React.createElement("div", { style: { flex: 1, minWidth: 80 } },
-                    React.createElement("div", { style: S.dirBarTrack },
-                        React.createElement("div", { style: { ...S.dirBarFill, width: `${s.wr}%`, background: s.wr >= 50 ? '#7fb069' : '#d96459' } }))))))))),
-        execStats.length > 0 && (React.createElement("div", { style: S.card },
-            React.createElement("div", { style: S.chartTitle }, "Execution tags"),
-            React.createElement("div", { style: S.chartSub }, "Patterns in your mistakes and wins"),
-            React.createElement("div", { style: { display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 16 } }, execStats.map(m => (React.createElement("div", { key: m.tag, style: { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', border: '1px solid', borderRadius: 2, fontSize: 11, background: m.tag === 'Perfect Execution' ? 'rgba(127,176,105,0.12)' : 'rgba(217,100,89,0.08)', borderColor: m.tag === 'Perfect Execution' ? 'rgba(127,176,105,0.3)' : 'rgba(217,100,89,0.25)' } },
-                React.createElement("span", { style: { color: m.tag === 'Perfect Execution' ? '#7fb069' : '#d96459' } }, m.tag),
-                React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#8a857a' } },
-                    m.n,
-                    "\u00D7"),
-                React.createElement("span", { style: { color: m.pnl >= 0 ? '#7fb069' : '#d96459', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 } }, fmt$(m.pnl, 0)))))))),
-        React.createElement("div", { style: S.card },
-            React.createElement("div", { style: S.chartTitle }, "Performance by session"),
-            React.createElement("div", { style: S.chartSub }, "Asia 00\u201307 \u00B7 London 07\u201312 \u00B7 Overlap 12\u201316 \u00B7 NY 16\u201321"),
-            React.createElement(ResponsiveContainer, { width: "100%", height: 200 },
-                React.createElement(BarChart, { data: sessionStats, margin: { top: 20, right: 20, left: 10, bottom: 10 } },
-                    React.createElement(XAxis, { dataKey: "session", stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' } }),
-                    React.createElement(YAxis, { stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' }, tickFormatter: v => `$${v.toFixed(0)}` }),
-                    React.createElement(Tooltip, { contentStyle: { background: '#1a1816', border: '1px solid #2a2823', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }, labelStyle: { color: '#8a857a' }, formatter: (v, k, p) => [fmt$(v), `${p.payload.n} trades · ${p.payload.wr.toFixed(0)}% WR`] }),
-                    React.createElement(Bar, { dataKey: "pnl", radius: [2, 2, 0, 0] }, sessionStats.map((s, i) => React.createElement(Cell, { key: i, fill: s.pnl >= 0 ? '#7fb069' : '#d96459' })))))),
-        React.createElement("div", { style: S.card },
-            React.createElement("div", { style: S.chartTitle }, "Performance by hour (UTC)"),
-            React.createElement("div", { style: S.chartSub }, "Find your sharpest hours"),
-            React.createElement(ResponsiveContainer, { width: "100%", height: 200 },
-                React.createElement(BarChart, { data: hourStats, margin: { top: 20, right: 20, left: 10, bottom: 10 } },
-                    React.createElement(XAxis, { dataKey: "hour", stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' }, tickFormatter: h => `${h}h` }),
-                    React.createElement(YAxis, { stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' }, tickFormatter: v => `$${v.toFixed(0)}` }),
-                    React.createElement(Tooltip, { contentStyle: { background: '#1a1816', border: '1px solid #2a2823', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }, labelStyle: { color: '#8a857a' }, formatter: (v, k, p) => [fmt$(v), `${p.payload.n} trades`], labelFormatter: l => `${l}:00 UTC` }),
-                    React.createElement(Bar, { dataKey: "pnl", radius: [2, 2, 0, 0] }, hourStats.map((h, i) => React.createElement(Cell, { key: i, fill: h.pnl >= 0 ? '#7fb069' : '#d96459', opacity: h.n === 0 ? 0.15 : 1 })))))),
-        React.createElement("div", { style: S.card },
-            React.createElement("div", { style: S.chartTitle }, "Weekly summary"),
-            React.createElement("div", { style: S.chartSub }, "Net P&L and win rate by week"),
-            weeklyStats.length === 0 ? React.createElement("div", { style: { ...S.helpText, marginTop: 12 } }, "No data yet.") : (React.createElement("div", { style: S.tableWrap },
-                React.createElement("table", { style: S.table },
-                    React.createElement("thead", null,
-                        React.createElement("tr", null,
-                            React.createElement("th", { style: S.th }, "Week"),
-                            React.createElement("th", { style: { ...S.th, textAlign: 'right' } }, "Trades"),
-                            React.createElement("th", { style: { ...S.th, textAlign: 'right' } }, "Win rate"),
-                            React.createElement("th", { style: { ...S.th, textAlign: 'right' } }, "Net P&L"))),
-                    React.createElement("tbody", null, weeklyStats.map(w => (React.createElement("tr", { key: w.week, style: S.tr },
-                        React.createElement("td", { style: S.td },
-                            w.week,
-                            " ",
-                            React.createElement("span", { style: { color: '#5a564c', fontSize: 10 } },
-                                "(",
-                                w.firstDay,
-                                ")")),
-                        React.createElement("td", { style: { ...S.td, textAlign: 'right' } }, w.n),
-                        React.createElement("td", { style: { ...S.td, textAlign: 'right', color: w.wr >= 50 ? '#7fb069' : '#d96459' } },
-                            w.wr.toFixed(1),
-                            "%"),
-                        React.createElement("td", { style: { ...S.td, textAlign: 'right', color: w.pnl >= 0 ? '#7fb069' : '#d96459', fontWeight: 600 } }, fmt$(w.pnl))))))))))));
-}
-// ─── Calendar ─────────────────────────────────────────────────────────────────
-function calCol(pnl, max) {
-    if (!pnl)
-        return '#1f1d18';
-    const t = Math.min(1, Math.abs(pnl) / max);
-    if (pnl > 0)
-        return `rgb(${Math.round(60 + 67 * t)},${Math.round(100 + 76 * t)},${Math.round(60 + 9 * t)})`;
-    return `rgb(${Math.round(150 + 67 * t)},${Math.round(50 + 50 * t)},${Math.round(50 + 39 * t)})`;
-}
-function CalendarView({ dailyPnl, trades }) {
-    const allDays = Object.keys(dailyPnl).sort();
-    if (!allDays.length)
-        return React.createElement("div", { style: S.content },
-            React.createElement("div", { style: S.card },
-                React.createElement("div", { style: S.helpText }, "No trades yet.")));
-    const months = {};
-    for (const d of allDays) {
-        const ym = d.slice(0, 7);
-        if (!months[ym])
-            months[ym] = {};
-        months[ym][d] = dailyPnl[d];
-    }
-    const maxA = Math.max(...Object.values(dailyPnl).map(Math.abs), 1);
-    return (React.createElement("div", { style: S.content },
-        React.createElement("div", { style: S.card },
-            React.createElement("div", { style: S.chartTitle }, "P&L calendar"),
-            React.createElement("div", { style: S.chartSub }, "Each square = one trading day"),
-            React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 28, marginTop: 20 } }, Object.entries(months).sort().map(([ym, days]) => React.createElement(MonthBlock, { key: ym, ym: ym, days: days, maxA: maxA }))),
-            React.createElement("div", { style: { display: 'flex', gap: 20, marginTop: 24, alignItems: 'center', flexWrap: 'wrap' } },
-                React.createElement("span", { style: S.dirBarSub }, "Legend:"),
-                [[-1, 'Loss'], [-0.4, 'Small loss'], [0, 'Flat'], [0.4, 'Small win'], [1, 'Big win']].map(([v, l]) => (React.createElement("div", { key: l, style: { display: 'flex', alignItems: 'center', gap: 6 } },
-                    React.createElement("div", { style: { width: 14, height: 14, borderRadius: 2, background: calCol(v * maxA, maxA), border: '1px solid #2a2823' } }),
-                    React.createElement("span", { style: S.dirBarSub }, l)))))),
-        React.createElement("div", { style: S.card },
-            React.createElement("div", { style: S.chartTitle }, "Daily breakdown"),
-            React.createElement("div", { style: S.tableWrap },
-                React.createElement("table", { style: S.table },
-                    React.createElement("thead", null,
-                        React.createElement("tr", null,
-                            React.createElement("th", { style: S.th }, "Date"),
-                            React.createElement("th", { style: { ...S.th, textAlign: 'right' } }, "Trades"),
-                            React.createElement("th", { style: { ...S.th, textAlign: 'right' } }, "Net P&L"))),
-                    React.createElement("tbody", null, allDays.slice().reverse().map(day => {
-                        const n = trades.filter(t => isoDay(t.exitTime) === day).length;
-                        return (React.createElement("tr", { key: day, style: S.tr },
-                            React.createElement("td", { style: S.td }, day),
-                            React.createElement("td", { style: { ...S.td, textAlign: 'right' } }, n),
-                            React.createElement("td", { style: { ...S.td, textAlign: 'right', color: dailyPnl[day] >= 0 ? '#7fb069' : '#d96459', fontWeight: 600 } }, fmt$(dailyPnl[day]))));
-                    })))))));
-}
-function MonthBlock({ ym, days, maxA }) {
-    var _a;
-    const [hov, setHov] = useState(null);
-    const d0 = new Date(ym + '-01T00:00:00Z');
-    const label = d0.toLocaleString('en-GB', { month: 'long', year: 'numeric' });
-    const fdow = d0.getUTCDay() === 0 ? 6 : d0.getUTCDay() - 1;
-    const dim = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 0)).getUTCDate();
-    const cells = [];
-    for (let i = 0; i < fdow; i++)
-        cells.push(null);
-    for (let d = 1; d <= dim; d++) {
-        const key = `${ym}-${String(d).padStart(2, '0')}`;
-        cells.push({ d, key, pnl: (_a = days[key]) !== null && _a !== void 0 ? _a : null });
-    }
-    return (React.createElement("div", null,
-        React.createElement("div", { style: { fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8a857a', marginBottom: 10 } }, label),
-        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(7, 28px)', gap: 3 } },
-            ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((x, i) => React.createElement("div", { key: i, style: { fontSize: 9, color: '#3a372f', textAlign: 'center', fontWeight: 600 } }, x)),
-            cells.map((cell, i) => {
-                if (!cell)
-                    return React.createElement("div", { key: `e${i}` });
-                const bg = cell.pnl !== null ? calCol(cell.pnl, maxA) : '#15130f';
-                return (React.createElement("div", { key: cell.key, style: { width: 28, height: 28, borderRadius: 3, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: cell.pnl !== null ? 'rgba(255,255,255,0.6)' : '#2a2823', cursor: cell.pnl !== null ? 'pointer' : 'default', border: hov === cell.key ? '1px solid rgba(201,169,107,0.6)' : '1px solid transparent', position: 'relative' }, onMouseEnter: () => setHov(cell.key), onMouseLeave: () => setHov(null), title: cell.pnl !== null ? `${cell.key}: ${fmt$(cell.pnl)}` : '' }, cell.d));
-            }))));
-}
-// ─── Trades Table ─────────────────────────────────────────────────────────────
-function TradesTable({ trades, sortKey, sortDir, doSort, onEdit }) {
-    const SH = ({ k, children, align = 'left' }) => (React.createElement("th", { style: { ...S.th, textAlign: align, cursor: 'pointer' }, onClick: () => doSort(k) },
-        React.createElement("span", { style: { display: 'inline-flex', alignItems: 'center', gap: 4 } },
-            children,
-            sortKey === k && (sortDir === 'asc' ? React.createElement(ChevronUp, null) : React.createElement(ChevronDown, null)))));
-    return (React.createElement("div", { style: S.content },
-        React.createElement("div", { style: { ...S.helpText, marginBottom: 4 } }, "Click any row to add notes, setup tags, and rating."),
-        React.createElement("div", { style: S.tableWrap },
-            React.createElement("table", { style: S.table },
-                React.createElement("thead", null,
-                    React.createElement("tr", null,
-                        React.createElement(SH, { k: "exitTime" }, "Closed"),
-                        React.createElement(SH, { k: "symbol" }, "Symbol"),
-                        React.createElement(SH, { k: "direction" }, "Side"),
-                        React.createElement("th", { style: S.th }, "Setup"),
-                        React.createElement("th", { style: S.th }, "Rating"),
-                        React.createElement(SH, { k: "qty", align: "right" }, "Qty"),
-                        React.createElement(SH, { k: "entryPrice", align: "right" }, "Entry"),
-                        React.createElement(SH, { k: "exitPrice", align: "right" }, "Exit"),
-                        React.createElement(SH, { k: "pnlPctNet", align: "right" }, "%"),
-                        React.createElement(SH, { k: "pnl", align: "right" }, "Gross"),
-                        React.createElement(SH, { k: "fees", align: "right" }, "Fees"),
-                        React.createElement(SH, { k: "pnlNet", align: "right" }, "Net"))),
-                React.createElement("tbody", null, trades.map(t => (React.createElement("tr", { key: t.id, style: { ...S.tr, cursor: 'pointer' }, onClick: () => onEdit(t) },
-                    React.createElement("td", { style: S.td }, fmtDate(t.exitTime)),
-                    React.createElement("td", { style: { ...S.td, color: '#e8e6df' } }, t.symbol),
-                    React.createElement("td", { style: S.td },
-                        React.createElement("span", { style: { ...S.tag, background: t.direction === 'long' ? 'rgba(127,176,105,0.12)' : 'rgba(217,100,89,0.12)', color: t.direction === 'long' ? '#7fb069' : '#d96459' } }, t.direction)),
-                    React.createElement("td", { style: S.td }, t.setupTags.length ? React.createElement("div", { style: { display: 'flex', gap: 4, flexWrap: 'wrap' } }, t.setupTags.map(s => React.createElement("span", { key: s, style: { fontSize: 9, letterSpacing: '0.1em', color: '#c9a96b', background: 'rgba(201,169,107,0.08)', border: '1px solid rgba(201,169,107,0.15)', padding: '2px 6px', borderRadius: 1, textTransform: 'uppercase', fontWeight: 600 } }, s))) : React.createElement("span", { style: { color: '#3a372f', fontSize: 10 } }, "\u2014")),
-                    React.createElement("td", { style: S.td }, t.rating > 0 ? React.createElement("span", { style: { color: '#c9a96b' } },
-                        '★'.repeat(t.rating),
-                        '☆'.repeat(5 - t.rating)) : React.createElement("span", { style: { color: '#3a372f', fontSize: 10 } }, "\u2014")),
-                    React.createElement("td", { style: { ...S.td, textAlign: 'right' } }, t.qty),
-                    React.createElement("td", { style: { ...S.td, textAlign: 'right' } },
-                        "$",
-                        t.entryPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })),
-                    React.createElement("td", { style: { ...S.td, textAlign: 'right' } },
-                        "$",
-                        t.exitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })),
-                    React.createElement("td", { style: { ...S.td, textAlign: 'right', color: t.pnlNet >= 0 ? '#7fb069' : '#d96459' } }, fmtPct(t.pnlPctNet)),
-                    React.createElement("td", { style: { ...S.td, textAlign: 'right', color: t.pnl >= 0 ? '#8a8575' : '#9a6560' } }, fmt$(t.pnl)),
-                    React.createElement("td", { style: { ...S.td, textAlign: 'right', color: '#c9a96b' } },
-                        "\u2212",
-                        fmt$(t.fees).replace('-', '')),
-                    React.createElement("td", { style: { ...S.td, textAlign: 'right', color: t.pnlNet >= 0 ? '#7fb069' : '#d96459', fontWeight: 600 } }, fmt$(t.pnlNet))))))))));
-}
-// ─── Prop Firm ────────────────────────────────────────────────────────────────
-function PropFirm({ ps, settings, onChange, trades }) {
-    const sc = ps.status === 'pass' ? '#7fb069' : ps.status === 'fail' ? '#d96459' : '#c9a96b';
-    const sl = ps.status === 'pass' ? 'PROFIT TARGET HIT' : ps.status === 'fail' ? 'ACCOUNT BUSTED' : 'IN PROGRESS';
-    const [now, setNow] = useState(() => new Date());
-    useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
-    const todayUTC = now.toISOString().slice(0, 10);
-    const sr = 86400 - (now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds());
-    const pad = n => String(n).padStart(2, '0');
-    const hh = pad(now.getUTCHours()), mm = pad(now.getUTCMinutes()), ss = pad(now.getUTCSeconds());
-    const todayPnl = useMemo(() => trades.filter(t => isoDay(t.exitTime) === todayUTC).reduce((s, t) => s + t.pnlNet, 0), [trades, todayUTC]);
-    const prevEq = useMemo(() => {
-        const { dailyClosingEquity: dce, size } = ps;
-        const days = Object.keys(dce).sort();
-        const ti = days.indexOf(todayUTC);
-        if (ti > 0)
-            return dce[days[ti - 1]];
-        if (ti === -1 && days.length)
-            return dce[days[days.length - 1]];
-        return size;
-    }, [ps, todayUTC]);
-    const cud = Math.max(0, ps.size - ps.equity);
-    const mddp = Math.min(100, cud / ps.maxDDLimit * 100);
-    const mddc = mddp >= 100 ? '#d96459' : mddp >= 75 ? '#c9a96b' : mddp > 0 ? '#e8b84b' : '#3a372f';
-    const dlt = todayPnl < 0 ? Math.abs(todayPnl) : 0;
-    const dlp = Math.min(100, dlt / ps.dailyLossLimit * 100);
-    const dlc = dlp >= 100 ? '#d96459' : dlp >= 75 ? '#c9a96b' : dlp > 0 ? '#e8b84b' : '#3a372f';
-    return (React.createElement("div", { style: S.content },
-        React.createElement("div", { style: { display: 'flex', gap: 32, alignItems: 'stretch', flexWrap: 'wrap', background: '#15130f', border: '1px solid rgba(201,169,107,0.2)', borderLeft: '3px solid #c9a96b', padding: 20 } },
-            React.createElement("div", { style: { display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 160 } },
-                React.createElement("div", { style: { fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a564c', marginBottom: 8 } }, todayUTC),
-                React.createElement("div", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 36, fontWeight: 500, color: '#e8e6df', letterSpacing: '-0.02em', lineHeight: 1 } },
-                    hh,
-                    ":",
-                    mm,
-                    ":",
-                    ss,
-                    " ",
-                    React.createElement("span", { style: { fontSize: 12, color: '#5a564c' } }, "UTC")),
-                React.createElement("div", { style: { fontSize: 10, color: '#5a564c', marginTop: 10, letterSpacing: '0.06em', fontFamily: 'JetBrains Mono, monospace' } },
-                    "resets in ",
-                    pad(Math.floor(sr / 3600)),
-                    ":",
-                    pad(Math.floor(sr % 3600 / 60)),
-                    ":",
-                    pad(sr % 60))),
-            React.createElement("div", { style: { flex: 1, minWidth: 260, borderLeft: '1px solid #1f1d18', paddingLeft: 32 } },
-                React.createElement("div", { style: S.statLabel },
-                    "Today's P&L ",
-                    React.createElement("span", { style: { color: '#3a372f', marginLeft: 6 } },
-                        "vs prev close ",
-                        fmt$(prevEq))),
-                React.createElement("div", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 28, fontWeight: 500, letterSpacing: '-0.01em', color: todayPnl > 0 ? '#7fb069' : todayPnl < 0 ? '#d96459' : '#5a564c' } }, todayPnl === 0 ? '—' : fmt$(todayPnl)),
-                [['Daily loss (3%)', dlt, dlp, dlc, ps.dailyLossLimit], ['Max drawdown (6%)', cud, mddp, mddc, ps.maxDDLimit]].map(([lbl, val, pct, color, lim]) => (React.createElement("div", { key: lbl, style: { marginTop: 16 } },
-                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 6 } },
-                        React.createElement("span", { style: S.dirBarLabel }, lbl),
-                        React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11 } },
-                            val > 0 ? React.createElement("span", { style: { color } },
-                                "\u2212",
-                                fmt$(val)) : React.createElement("span", { style: { color: '#5a564c' } }, lbl.includes('Daily') ? 'no loss' : fmt$(ps.size, 0) + ' no DD'),
-                            React.createElement("span", { style: { color: '#5a564c' } },
-                                " / ",
-                                fmt$(lim, 0)))),
-                    React.createElement("div", { style: S.dirBarTrack },
-                        React.createElement("div", { style: { ...S.dirBarFill, width: `${pct}%`, background: color } })),
-                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginTop: 4 } },
-                        React.createElement("span", { style: S.dirBarSub }, val === 0 ? (lbl.includes('Daily') ? 'in profit or flat — not counting' : 'above ' + fmt$(ps.size, 0) + ' — not counting') : `${pct.toFixed(1)}% used`),
-                        val > 0 && React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color } },
-                            fmt$(lim - val),
-                            " left"))))))),
-        React.createElement("div", { style: { ...S.card, borderLeft: `3px solid ${sc}` } },
-            React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' } },
-                React.createElement("div", null,
-                    React.createElement("div", { style: S.chartSub },
-                        "Simulated on ",
-                        fmt$(ps.size, 0),
-                        " account"),
-                    React.createElement("div", { style: { ...S.chartTitle, color: sc, marginTop: 4 } }, sl),
-                    ps.breach && React.createElement("div", { style: { fontSize: 12, color: '#a8a399', marginTop: 12, lineHeight: 1.5 } },
-                        "Breached ",
-                        React.createElement("strong", { style: { color: '#e08278' } }, ps.breach.rule),
-                        " at trade #",
-                        ps.breach.atTrade,
-                        " (",
-                        ps.breach.atDay,
-                        "). ",
-                        ps.breach.detail,
-                        "."),
-                    ps.targetHit && React.createElement("div", { style: { fontSize: 12, color: '#9bc785', marginTop: 12, lineHeight: 1.5 } },
-                        "Hit profit target at trade #",
-                        ps.targetHit.atTrade,
-                        " (",
-                        ps.targetHit.atDay,
-                        ") \u2014 equity ",
-                        fmt$(ps.targetHit.equity),
-                        ".")),
-                React.createElement("div", { style: { textAlign: 'right', minWidth: 180 } },
-                    React.createElement("div", { style: S.statLabel }, "Your payout"),
-                    React.createElement("div", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 22, fontWeight: 500, color: ps.payout > 0 ? '#7fb069' : '#5a564c' } }, fmt$(ps.payout)),
-                    React.createElement("div", { style: S.statSub },
-                        settings.propProfitSplitPct,
-                        "% of ",
-                        fmt$(ps.finalProfit),
-                        " profit")))),
-        React.createElement("div", { style: S.statsGrid },
-            React.createElement(SC, { label: "Account equity", value: fmt$(ps.equity), sub: `${fmtPct(ps.finalProfit / ps.size * 100)} from start`, accent: ps.finalProfit >= 0 ? '#7fb069' : '#d96459' }),
-            React.createElement(SC, { label: "Profit target", value: fmt$(ps.profitTarget, 0), sub: `${settings.propProfitTargetPct}% of account` }),
-            React.createElement(SC, { label: "Daily loss limit", value: fmt$(ps.dailyLossLimit, 0), sub: `${settings.propDailyLossPct}% per day` }),
-            React.createElement(SC, { label: "Max drawdown", value: fmt$(ps.maxDDLimit, 0), sub: `${settings.propMaxDDPct}% static · floor ${fmt$(ps.ddFloor, 0)}` })),
-        React.createElement("div", { style: S.card },
-            React.createElement("div", { style: S.chartTitle }, "Historical progress"),
-            React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 18, marginTop: 16 } },
-                React.createElement(RuleBar, { label: "Profit target", value: ps.finalProfit > 0 ? fmt$(ps.finalProfit) : '—', limit: fmt$(ps.profitTarget, 0), pct: ps.profitProgressPct, color: "#7fb069", inverted: true }))),
-        React.createElement("div", { style: S.card },
-            React.createElement("div", { style: { marginBottom: 16 } },
-                React.createElement("div", { style: S.chartTitle }, "Account equity simulation"),
-                React.createElement("div", { style: S.chartSub },
-                    fmt$(ps.size, 0),
-                    " starting \u00B7 floor ",
-                    fmt$(ps.ddFloor, 0),
-                    " \u00B7 target ",
-                    fmt$(ps.size + ps.profitTarget, 0))),
-            React.createElement(ResponsiveContainer, { width: "100%", height: 280 },
-                React.createElement(LineChart, { data: ps.curve, margin: { top: 10, right: 20, left: 10, bottom: 10 } },
-                    React.createElement(XAxis, { dataKey: "idx", stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' } }),
-                    React.createElement(YAxis, { stroke: "#5a564c", fontSize: 10, tickLine: false, axisLine: { stroke: '#2a2823' }, tickFormatter: v => `$${(v / 1000).toFixed(2)}k`, domain: [Math.min(ps.ddFloor - 50, ps.equity - 100), Math.max(ps.size + ps.profitTarget + 50, ps.equity + 100)] }),
-                    React.createElement(Tooltip, { contentStyle: { background: '#1a1816', border: '1px solid #2a2823', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }, labelStyle: { color: '#8a857a' }, formatter: v => [fmt$(v), 'Equity'], labelFormatter: l => `Trade #${l}` }),
-                    React.createElement(ReferenceLine, { y: ps.size, stroke: "#3a372f", strokeDasharray: "2 4", label: { value: 'Start', fill: '#5a564c', fontSize: 9, position: 'insideTopRight' } }),
-                    React.createElement(ReferenceLine, { y: ps.ddFloor, stroke: "#d96459", strokeDasharray: "3 3", label: { value: 'DD floor', fill: '#d96459', fontSize: 9, position: 'insideTopRight' } }),
-                    React.createElement(ReferenceLine, { y: ps.size + ps.profitTarget, stroke: "#7fb069", strokeDasharray: "3 3", label: { value: 'Target', fill: '#7fb069', fontSize: 9, position: 'insideTopRight' } }),
-                    React.createElement(Line, { type: "monotone", dataKey: "equity", stroke: sc, strokeWidth: 1.5, dot: false })))),
-        React.createElement("div", { style: S.twoCol },
-            React.createElement("div", { style: S.card },
-                React.createElement("div", { style: S.chartTitle }, "Trading days"),
-                React.createElement("div", { style: { display: 'flex', gap: 20, marginTop: 16 } },
-                    React.createElement("div", { style: { flex: 1 } },
-                        React.createElement("div", { style: S.statLabel }, "Total"),
-                        React.createElement("div", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 32, fontWeight: 500, color: '#e8e6df' } }, ps.tradingDays)),
-                    React.createElement("div", { style: { flex: 1 } },
-                        React.createElement("div", { style: S.statLabel }, "Green"),
-                        React.createElement("div", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 32, fontWeight: 500, color: '#7fb069' } }, ps.profitableDays)),
-                    React.createElement("div", { style: { flex: 1 } },
-                        React.createElement("div", { style: S.statLabel }, "Red"),
-                        React.createElement("div", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 32, fontWeight: 500, color: '#d96459' } }, ps.losingDays)))),
-            React.createElement("div", { style: S.card },
-                React.createElement("div", { style: S.chartTitle }, "Breakout rules"),
-                React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, marginTop: 12 } }, [['Account size ($)', 'propAccountSize', 1], ['Profit target (%)', 'propProfitTargetPct', 0.1], ['Daily loss (%)', 'propDailyLossPct', 0.1], ['Max drawdown (%)', 'propMaxDDPct', 0.1], ['Profit split (%)', 'propProfitSplitPct', 1]].map(([lbl, key, step]) => (React.createElement("label", { key: key, style: S.label },
-                    lbl,
-                    React.createElement("input", { type: "number", step: step, value: settings[key], onChange: e => onChange({ ...settings, [key]: parseFloat(e.target.value) || 0 }), style: S.input })))))))));
-}
-// ─── Settings Tab ─────────────────────────────────────────────────────────────
-function SettingsTab({ settings, onChange }) {
-    return (React.createElement("div", { style: S.content },
-        React.createElement("div", { style: S.card },
-            React.createElement("div", { style: S.chartTitle }, "Account settings"),
-            React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 16, marginTop: 12 } },
-                React.createElement("label", { style: S.label },
+function EmptyState({ onPick, sett, setSett }) {
+    return (React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 100px)', padding: 32 } },
+        React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 48, maxWidth: 520, textAlign: 'center' } },
+            React.createElement("svg", { width: 48, height: 48, viewBox: "0 0 28 28", style: { marginBottom: 16 } },
+                React.createElement("rect", { width: 28, height: 28, rx: 5, fill: C.teal, opacity: 0.15 }),
+                React.createElement("polyline", { points: "4,22 9,13 14,17 19,7 24,11", fill: "none", stroke: C.teal, strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round" }),
+                React.createElement("circle", { cx: 19, cy: 7, r: 2, fill: C.teal })),
+            React.createElement("h2", { style: { fontWeight: 700, fontSize: 20, color: C.text, marginBottom: 8 } }, "My Trade Journal"),
+            React.createElement("p", { style: { fontSize: 13, color: C.textDim, lineHeight: 1.7, marginBottom: 28 } }, "Import your TradingView paper trading order history to get started."),
+            React.createElement("div", { style: { textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 } }, ['Open Trading Panel in TradingView → click account name', 'Choose Export data… → select History → Export', 'Import the CSV here'].map((s, i) => (React.createElement("div", { key: i, style: { display: 'flex', gap: 12, fontSize: 12, color: C.textDim, lineHeight: 1.5 } },
+                React.createElement("span", { style: { fontFamily: C.mono, fontSize: 10, color: C.teal, minWidth: 20, fontWeight: 700 } },
+                    "0",
+                    i + 1),
+                s)))),
+            React.createElement("button", { onClick: onPick, style: { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px', background: C.teal, border: 'none', color: '#001a14', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 5, letterSpacing: '0.04em', marginBottom: 24 } },
+                React.createElement(IcoUpload, { s: 14 }),
+                " Import CSV"),
+            React.createElement("div", { style: { borderTop: `1px solid ${C.border}`, paddingTop: 20, display: 'flex', justifyContent: 'center', gap: 16 } },
+                React.createElement("label", { style: { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.textDim, fontWeight: 600 } },
                     "Starting balance ($)",
-                    React.createElement("input", { type: "number", value: settings.startingBalance, onChange: e => onChange({ ...settings, startingBalance: parseFloat(e.target.value) || 0 }), style: S.input })),
-                React.createElement("label", { style: S.label },
-                    "Risk per trade ($)",
-                    React.createElement("input", { type: "number", value: settings.riskPerTrade, onChange: e => onChange({ ...settings, riskPerTrade: parseFloat(e.target.value) || 0 }), style: S.input })),
-                React.createElement("label", { style: S.label },
-                    "Fee per leg (%)",
-                    React.createElement("input", { type: "number", step: "0.01", value: settings.feeRate, onChange: e => onChange({ ...settings, feeRate: parseFloat(e.target.value) || 0 }), style: S.input }))),
-            React.createElement("div", { style: { ...S.helpText, marginTop: 16 } },
-                "Fee per leg is charged on both entry and exit notional. Round-trip = ",
-                (settings.feeRate * 2).toFixed(2),
-                "%."))));
+                    React.createElement("input", { type: "number", value: sett.startingBalance, onChange: e => setSett({ ...sett, startingBalance: parseFloat(e.target.value) || 0 }), style: { background: '#0d1f30', border: `1px solid ${C.border2}`, color: C.text, padding: '8px 10px', fontFamily: C.mono, fontSize: 13, borderRadius: 3, outline: 'none', width: 160 } }))))));
 }
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const S = {
-    app: { minHeight: '100vh', background: 'radial-gradient(ellipse at top, #15130f 0%, #0a0908 100%)', color: '#a8a399', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, padding: '20px 20px 80px', maxWidth: 1400, margin: '0 auto' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingBottom: 20, borderBottom: '1px solid #1f1d18', marginBottom: 20, gap: 12, flexWrap: 'wrap' },
-    brand: { display: 'flex', alignItems: 'center', gap: 14 },
-    brandMark: { fontSize: 28, color: '#c9a96b', letterSpacing: -2, fontFamily: 'JetBrains Mono, monospace' },
-    brandTitle: { fontFamily: 'Fraunces, serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', color: '#e8e6df', lineHeight: 1 },
-    brandSub: { fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a564c', marginTop: 6 },
-    headerActions: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
-    feeChip: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px 6px 12px', background: 'rgba(201,169,107,0.06)', border: '1px solid rgba(201,169,107,0.25)', borderRadius: 2 },
-    feeChipLabel: { fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#c9a96b', fontWeight: 600 },
-    feeChipInput: { background: 'transparent', border: 'none', color: '#e8e6df', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 600, width: 48, padding: 0, textAlign: 'right', outline: 'none' },
-    feeChipUnit: { color: '#8a857a', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' },
-    btnGhost: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: 'transparent', border: '1px solid #2a2823', color: '#c9c5b9', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 2 },
-    btnPrimary: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '12px 20px', background: '#c9a96b', border: '1px solid #c9a96b', color: '#0a0908', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 2, letterSpacing: '0.06em', textTransform: 'uppercase' },
-    btnDanger: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: 'transparent', border: '1px solid #3a2a28', color: '#9a6560', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 2 },
-    banner: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', fontSize: 12, marginBottom: 16, borderRadius: 2 },
-    bannerOk: { background: 'rgba(127,176,105,0.08)', border: '1px solid rgba(127,176,105,0.25)', color: '#9bc785' },
-    bannerErr: { background: 'rgba(217,100,89,0.08)', border: '1px solid rgba(217,100,89,0.25)', color: '#e08278' },
-    bannerClose: { marginLeft: 'auto', background: 'transparent', border: 'none', color: 'inherit', fontSize: 18, cursor: 'pointer', padding: 0, lineHeight: 1 },
-    controls: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, gap: 16, flexWrap: 'wrap' },
-    tabs: { display: 'flex', borderBottom: '1px solid #1f1d18', flexWrap: 'wrap' },
-    tab: { background: 'transparent', border: 'none', borderBottom: '2px solid transparent', color: '#5a564c', padding: '10px 16px', fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 500 },
-    tabActive: { color: '#e8e6df', borderBottom: '2px solid #c9a96b' },
-    filters: { display: 'flex', gap: 8, flexWrap: 'wrap' },
-    select: { background: '#15130f', border: '1px solid #2a2823', color: '#c9c5b9', padding: '7px 10px', fontSize: 11, fontFamily: 'inherit', borderRadius: 2, cursor: 'pointer' },
-    content: { display: 'flex', flexDirection: 'column', gap: 16 },
-    statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 1, background: '#1f1d18', border: '1px solid #1f1d18' },
-    statCard: { background: '#15130f', padding: '18px 20px' },
-    statLabel: { fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a564c', marginBottom: 10, fontWeight: 500 },
-    statValue: { fontSize: 22, fontWeight: 500, lineHeight: 1.1, letterSpacing: '-0.01em' },
-    statSub: { fontSize: 10, color: '#6a665b', marginTop: 6 },
-    card: { background: '#15130f', border: '1px solid #1f1d18', padding: 20 },
-    feeCard: { background: 'linear-gradient(180deg,rgba(201,169,107,0.04) 0%,#15130f 100%)', border: '1px solid rgba(201,169,107,0.2)', padding: 20 },
-    feeBadge: { fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#c9a96b', background: 'rgba(201,169,107,0.1)', border: '1px solid rgba(201,169,107,0.3)', padding: '6px 12px', borderRadius: 2, fontWeight: 600, fontFamily: 'JetBrains Mono, monospace' },
-    feeLabel: { fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#5a564c', marginBottom: 8, fontWeight: 500 },
-    feeVal: { fontFamily: 'JetBrains Mono, monospace', fontSize: 22, fontWeight: 500, letterSpacing: '-0.01em' },
-    chartTitle: { fontFamily: 'Fraunces, serif', fontSize: 17, fontWeight: 600, color: '#e8e6df', letterSpacing: '-0.01em' },
-    chartSub: { fontSize: 11, color: '#6a665b', marginTop: 4, marginBottom: 8 },
-    twoCol: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 16 },
-    dirBarLabel: { fontSize: 10, letterSpacing: '0.16em', color: '#8a857a', fontWeight: 600, textTransform: 'uppercase' },
-    dirBarTrack: { height: 6, background: '#1f1d18', borderRadius: 1, overflow: 'hidden' },
-    dirBarFill: { height: '100%', transition: 'width 400ms ease' },
-    dirBarSub: { fontSize: 10, color: '#5a564c', letterSpacing: '0.04em' },
-    dirBarPct: { fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 600 },
-    streakLabel: { fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#5a564c', marginBottom: 8 },
-    tableWrap: { overflowX: 'auto', background: '#15130f', border: '1px solid #1f1d18' },
-    table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
-    th: { padding: '12px 16px', borderBottom: '1px solid #1f1d18', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#5a564c', fontWeight: 600, fontFamily: 'inherit', background: '#100f0d' },
-    tr: { borderBottom: '1px solid #1a1815' },
-    td: { padding: '11px 16px', color: '#a8a399', fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5 },
-    tag: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 1, fontWeight: 600, fontFamily: 'Inter, sans-serif' },
-    helpText: { fontSize: 12, color: '#8a857a', lineHeight: 1.7 },
-    footer: { marginTop: 40, paddingTop: 16, borderTop: '1px solid #1f1d18', fontSize: 10, color: '#5a564c', letterSpacing: '0.1em', textTransform: 'uppercase', textAlign: 'center' },
-    label: { display: 'flex', flexDirection: 'column', gap: 8, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8a857a', fontWeight: 500 },
-    input: { background: '#0f0e0c', border: '1px solid #2a2823', color: '#e8e6df', padding: '10px 12px', fontSize: 13, fontFamily: 'JetBrains Mono, monospace', borderRadius: 2, outline: 'none' },
-    overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 },
-    modal: { background: '#15130f', border: '1px solid #2a2823', width: '100%', maxWidth: 560, maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: 2 },
-    modalHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px 16px', borderBottom: '1px solid #1f1d18' },
-    modalTitle: { fontFamily: 'Fraunces, serif', fontSize: 20, color: '#e8e6df', fontWeight: 600 },
-    modalSub: { fontSize: 11, color: '#6a665b', marginTop: 4, fontFamily: 'JetBrains Mono, monospace' },
-    modalX: { background: 'transparent', border: 'none', color: '#5a564c', cursor: 'pointer', padding: 4 },
-    modalBody: { flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 },
-    modalFoot: { display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 24px', borderTop: '1px solid #1f1d18' },
-    msec: { display: 'flex', flexDirection: 'column', gap: 10 },
-    mlabel: { fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a564c', fontWeight: 600 },
-    tagGrid: { display: 'flex', flexWrap: 'wrap', gap: 8 },
-    tagBtn: { background: 'transparent', border: '1px solid #2a2823', color: '#8a857a', padding: '6px 12px', fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', borderRadius: 2 },
-    tagSetup: { background: 'rgba(201,169,107,0.12)', border: '1px solid rgba(201,169,107,0.4)', color: '#c9a96b' },
-    tagGood: { background: 'rgba(127,176,105,0.12)', border: '1px solid rgba(127,176,105,0.4)', color: '#7fb069' },
-    tagBad: { background: 'rgba(217,100,89,0.12)', border: '1px solid rgba(217,100,89,0.4)', color: '#d96459' },
-    textarea: { background: '#0f0e0c', border: '1px solid #2a2823', color: '#e8e6df', padding: '10px 12px', fontSize: 12, fontFamily: 'Inter, sans-serif', borderRadius: 2, outline: 'none', resize: 'vertical', lineHeight: 1.6, width: '100%' },
-};
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(React.createElement(TradingJournal, null));
+root.render(React.createElement(App, null));
 
-};
+}
 </script>
 </body>
 </html>
