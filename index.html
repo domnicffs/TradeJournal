@@ -483,8 +483,7 @@ function TradingJournal() {
         }
         return buckets;
     }, [filtered]);
-    // Prop firm simulation: replay the exact same trades against a $X account
-    // with the firm's drawdown / daily loss / profit target rules.
+    // Prop firm simulation: replay trades day-by-day against a $X account.
     const propStats = useMemo(() => {
         const list = filtered;
         if (list.length === 0)
@@ -493,52 +492,49 @@ function TradingJournal() {
         const profitTarget = size * (settings.propProfitTargetPct / 100);
         const dailyLossLimit = size * (settings.propDailyLossPct / 100);
         const maxDDLimit = size * (settings.propMaxDDPct / 100);
-        const ddFloor = size - maxDDLimit; // static drawdown — fixed line you can never cross
+        const ddFloor = size - maxDDLimit;
         let equity = size;
-        let worstUnderwater = 0; // largest amount you've ever been BELOW $size (only counts when equity < size)
-        let breach = null; // first rule breach (account would have busted)
-        let targetHitAt = null; // first trade index where profit target was reached
+        let breach = null;
+        let targetHitAt = null;
         const equityCurve = [{ idx: 0, equity: size }];
-        const dailyPnl = {}; // YYYY-MM-DD (UTC) -> net pnl for the day
-        for (let i = 0; i < list.length; i++) {
-            const t = list[i];
-            // Bucket by exit-day in UTC (00:00–24:00 UTC)
+        const dailyPnl = {}; // day -> pnl
+        // dailyClosingEquity: what equity was at end of each UTC day
+        const dailyClosingEquity = {}; // day -> equity after all trades that day
+        // Sort all days seen
+        for (const t of list) {
             const day = new Date(t.exitTime).toISOString().slice(0, 10);
             dailyPnl[day] = (dailyPnl[day] || 0) + t.pnlNet;
+        }
+        for (let i = 0; i < list.length; i++) {
+            const t = list[i];
+            const day = new Date(t.exitTime).toISOString().slice(0, 10);
             equity += t.pnlNet;
-            // Drawdown only counts when equity is BELOW the starting balance.
-            // Above $size you have no drawdown — being up doesn't consume the buffer.
-            if (equity < size) {
-                const underwater = size - equity;
-                if (underwater > worstUnderwater)
-                    worstUnderwater = underwater;
-            }
+            dailyClosingEquity[day] = equity;
             equityCurve.push({ idx: i + 1, equity });
-            // Check rule breaches (only record the FIRST breach)
-            // Daily loss is checked intra-day because the account would close immediately
-            // on breach — not at end of day.
-            if (!breach) {
-                if (equity <= ddFloor) {
-                    breach = { rule: 'Max drawdown', detail: `Equity hit ${formatMoney(equity)}, below floor of ${formatMoney(ddFloor)}`, atTrade: i + 1, atDay: day };
-                }
-                else if (dailyPnl[day] <= -dailyLossLimit) {
-                    breach = { rule: 'Daily loss limit', detail: `Lost ${formatMoney(Math.abs(dailyPnl[day]))} on ${day}, limit ${formatMoney(dailyLossLimit)}`, atTrade: i + 1, atDay: day };
-                }
+            // Max drawdown breach: only triggers if equity is below $size floor
+            if (!breach && equity <= ddFloor) {
+                breach = { rule: 'Max drawdown', detail: `Equity hit ${formatMoney(equity)}, below floor of ${formatMoney(ddFloor)}`, atTrade: i + 1, atDay: day };
             }
-            // Track first time profit target was hit (only if no breach yet)
+            // Daily loss breach: how much below the PREVIOUS day's closing equity are we today
+            // Get sorted unique days up to this point to find yesterday
+            const sortedDays = Object.keys(dailyClosingEquity).sort();
+            const todayIdx = sortedDays.indexOf(day);
+            const prevDayEquity = todayIdx > 0 ? dailyClosingEquity[sortedDays[todayIdx - 1]] : size;
+            const dailyDrawdown = prevDayEquity - equity; // positive = loss from prev close
+            if (!breach && dailyDrawdown >= dailyLossLimit) {
+                breach = { rule: 'Daily loss limit', detail: `Down ${formatMoney(dailyDrawdown)} from previous close of ${formatMoney(prevDayEquity)} on ${day}, limit ${formatMoney(dailyLossLimit)}`, atTrade: i + 1, atDay: day };
+            }
             if (!targetHitAt && !breach && equity >= size + profitTarget) {
                 targetHitAt = { atTrade: i + 1, atDay: day, equity };
             }
         }
-        // Worst daily loss = largest single-day loss across days that CLOSED in the red.
-        // Days that dipped intra-day but closed green don't count.
         const dayValues = Object.values(dailyPnl);
         const redDays = dayValues.filter(v => v < 0);
-        const worstDailyLoss = redDays.length ? Math.min(...redDays) : 0;
         const finalProfit = equity - size;
         const profitProgressPct = Math.max(0, Math.min(100, (finalProfit / profitTarget) * 100));
-        const ddUsedPct = (worstUnderwater / maxDDLimit) * 100;
-        const dailyLossUsedPct = (Math.abs(worstDailyLoss) / dailyLossLimit) * 100;
+        // Current max drawdown: how far below $size right now (0 if above)
+        const currentUnderwater = Math.max(0, size - equity);
+        const ddUsedPct = (currentUnderwater / maxDDLimit) * 100;
         const tradingDays = Object.keys(dailyPnl).length;
         const profitableDays = dayValues.filter(v => v > 0).length;
         const losingDays = redDays.length;
@@ -553,11 +549,11 @@ function TradingJournal() {
         return {
             size, profitTarget, dailyLossLimit, maxDDLimit, ddFloor,
             equity, finalProfit, payout,
-            maxDDHit: worstUnderwater, ddUsedPct,
-            worstDailyLoss, dailyLossUsedPct,
+            currentUnderwater, ddUsedPct,
             profitProgressPct,
             breach, targetHitAt, status,
-            equityCurve, dailyPnl, tradingDays, profitableDays, losingDays,
+            equityCurve, dailyPnl, dailyClosingEquity,
+            tradingDays, profitableDays, losingDays,
         };
     }, [filtered, settings.propAccountSize, settings.propProfitTargetPct, settings.propDailyLossPct, settings.propMaxDDPct, settings.propProfitSplitPct]);
     const sortedTrades = useMemo(() => {
@@ -621,7 +617,7 @@ function TradingJournal() {
                         React.createElement("option", { value: "short" }, "Shorts only")))),
             tab === 'overview' && stats && React.createElement(Overview, { stats: stats, settings: settings }),
             tab === 'analytics' && stats && React.createElement(Analytics, { stats: stats, sessionStats: sessionStats, hourStats: hourStats }),
-            tab === 'propfirm' && propStats && React.createElement(PropFirm, { propStats: propStats, settings: settings, onChange: saveSettings }),
+            tab === 'propfirm' && propStats && React.createElement(PropFirm, { propStats: propStats, settings: settings, onChange: saveSettings, trades: filtered }),
             tab === 'trades' && (React.createElement(TradesTable, { trades: sortedTrades, sortKey: sortKey, sortDir: sortDir, setSort: setSort })),
             tab === 'settings' && React.createElement(Settings, { settings: settings, onChange: saveSettings }))),
         React.createElement("footer", { style: styles.footer }, trades.length > 0 && React.createElement("span", null,
@@ -815,12 +811,132 @@ function TradesTable({ trades, sortKey, sortDir, setSort }) {
                         formatMoney(t.fees).replace('-', '')),
                     React.createElement("td", { style: { ...styles.td, textAlign: 'right', color: t.pnlNet >= 0 ? '#7fb069' : '#d96459', fontWeight: 600 } }, formatMoney(t.pnlNet))))))))));
 }
-function PropFirm({ propStats, settings, onChange }) {
+function PropFirm({ propStats, settings, onChange, trades }) {
     const ps = propStats;
     const statusColor = ps.status === 'pass' ? '#7fb069' : ps.status === 'fail' ? '#d96459' : '#c9a96b';
     const statusLabel = ps.status === 'pass' ? 'PROFIT TARGET HIT' : ps.status === 'fail' ? 'ACCOUNT BUSTED' : 'IN PROGRESS';
     const equityColor = ps.finalProfit >= 0 ? '#7fb069' : '#d96459';
+    // Live UTC clock — ticks every second
+    const [now, setNow] = useState(() => new Date());
+    useEffect(() => {
+        const t = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(t);
+    }, []);
+    // Today's UTC date string e.g. "2026-04-22"
+    const todayUTC = now.toISOString().slice(0, 10);
+    // Seconds until next 00:00 UTC reset
+    const secondsUntilReset = 86400 - (now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds());
+    const hReset = String(Math.floor(secondsUntilReset / 3600)).padStart(2, '0');
+    const mReset = String(Math.floor((secondsUntilReset % 3600) / 60)).padStart(2, '0');
+    const sReset = String(secondsUntilReset % 60).padStart(2, '0');
+    // Today's P&L relative to yesterday's closing equity (the dynamic daily loss definition)
+    const todayPnl = useMemo(() => {
+        return trades
+            .filter(t => new Date(t.exitTime).toISOString().slice(0, 10) === todayUTC)
+            .reduce((sum, t) => sum + t.pnlNet, 0);
+    }, [trades, todayUTC]);
+    // Yesterday's closing equity — the baseline the daily loss is measured from
+    const prevDayEquity = useMemo(() => {
+        const { dailyClosingEquity, size } = ps;
+        const days = Object.keys(dailyClosingEquity).sort();
+        const todayIdx = days.indexOf(todayUTC);
+        if (todayIdx > 0)
+            return dailyClosingEquity[days[todayIdx - 1]];
+        if (todayIdx === -1 && days.length > 0)
+            return dailyClosingEquity[days[days.length - 1]];
+        return size; // no prior trading days — baseline is account size
+    }, [ps, todayUTC]);
+    // Current max drawdown: how far equity is below $5k RIGHT NOW (0 if above)
+    const currentMaxDD = Math.max(0, ps.size - ps.equity);
+    const maxDDBarPct = Math.min(100, (currentMaxDD / ps.maxDDLimit) * 100);
+    const maxDDBarColor = maxDDBarPct >= 100 ? '#d96459' : maxDDBarPct >= 75 ? '#c9a96b' : maxDDBarPct > 0 ? '#e8b84b' : '#3a372f';
+    const dailyLossLimit = ps.dailyLossLimit;
+    // Daily loss = how much we're down from yesterday's close today only
+    // Only counts if negative (i.e. we're below where we started the day)
+    const dailyLossToday = todayPnl < 0 ? Math.abs(todayPnl) : 0;
+    const dailyLossBarPct = Math.min(100, (dailyLossToday / dailyLossLimit) * 100);
+    const dailyBarColor = dailyLossBarPct >= 100 ? '#d96459'
+        : dailyLossBarPct >= 75 ? '#c9a96b'
+            : dailyLossBarPct > 0 ? '#e8b84b'
+                : '#3a372f';
+    // Clock display
+    const hh = String(now.getUTCHours()).padStart(2, '0');
+    const mm = String(now.getUTCMinutes()).padStart(2, '0');
+    const ss = String(now.getUTCSeconds()).padStart(2, '0');
     return (React.createElement("div", { style: styles.content },
+        React.createElement("div", { style: styles.dailyCard },
+            React.createElement("div", { style: styles.dailyLeft },
+                React.createElement("div", { style: styles.utcDate }, todayUTC),
+                React.createElement("div", { style: styles.utcClock },
+                    hh,
+                    ":",
+                    mm,
+                    ":",
+                    ss,
+                    " ",
+                    React.createElement("span", { style: styles.utcLabel }, "UTC")),
+                React.createElement("div", { style: styles.resetLabel },
+                    "resets in ",
+                    hReset,
+                    ":",
+                    mReset,
+                    ":",
+                    sReset)),
+            React.createElement("div", { style: styles.dailyRight },
+                React.createElement("div", { style: styles.statLabel },
+                    "Today's P&L ",
+                    React.createElement("span", { style: { color: '#3a372f', marginLeft: 6 } },
+                        "vs prev close ",
+                        formatMoney(prevDayEquity))),
+                React.createElement("div", { style: {
+                        ...styles.feeImpactValue,
+                        fontSize: 28,
+                        color: todayPnl > 0 ? '#7fb069' : todayPnl < 0 ? '#d96459' : '#5a564c'
+                    } }, todayPnl === 0 ? '—' : formatMoney(todayPnl)),
+                React.createElement("div", { style: { marginTop: 20 } },
+                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 6 } },
+                        React.createElement("span", { style: styles.dirBarLabel }, "Daily loss (3%)"),
+                        React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11 } },
+                            dailyLossToday > 0
+                                ? React.createElement("span", { style: { color: dailyBarColor } },
+                                    "\u2212",
+                                    formatMoney(dailyLossToday))
+                                : React.createElement("span", { style: { color: '#5a564c' } }, "no loss"),
+                            React.createElement("span", { style: { color: '#5a564c' } },
+                                " / ",
+                                formatMoney(dailyLossLimit, 0)))),
+                    React.createElement("div", { style: styles.dirBarTrack },
+                        React.createElement("div", { style: { ...styles.dirBarFill, width: `${dailyLossBarPct}%`, background: dailyBarColor } })),
+                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginTop: 4 } },
+                        React.createElement("span", { style: styles.dirBarSub }, dailyLossToday === 0
+                            ? 'in profit or flat — not counting'
+                            : `${dailyLossBarPct.toFixed(1)}% used`),
+                        dailyLossToday > 0 && (React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: dailyBarColor } },
+                            formatMoney(dailyLossLimit - dailyLossToday),
+                            " left")))),
+                React.createElement("div", { style: { marginTop: 16 } },
+                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 6 } },
+                        React.createElement("span", { style: styles.dirBarLabel }, "Max drawdown (6% static)"),
+                        React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11 } },
+                            currentMaxDD > 0
+                                ? React.createElement("span", { style: { color: maxDDBarColor } },
+                                    "\u2212",
+                                    formatMoney(currentMaxDD))
+                                : React.createElement("span", { style: { color: '#5a564c' } },
+                                    "above ",
+                                    formatMoney(ps.size, 0)),
+                            React.createElement("span", { style: { color: '#5a564c' } },
+                                " / ",
+                                formatMoney(ps.maxDDLimit, 0)))),
+                    React.createElement("div", { style: styles.dirBarTrack },
+                        React.createElement("div", { style: { ...styles.dirBarFill, width: `${maxDDBarPct}%`, background: maxDDBarColor } })),
+                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginTop: 4 } },
+                        React.createElement("span", { style: styles.dirBarSub }, currentMaxDD === 0
+                            ? `equity above ${formatMoney(ps.size, 0)} — not counting`
+                            : `${maxDDBarPct.toFixed(1)}% used · floor ${formatMoney(ps.ddFloor, 0)}`),
+                        currentMaxDD > 0 && (React.createElement("span", { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: maxDDBarColor } },
+                            formatMoney(ps.maxDDLimit - currentMaxDD),
+                            " left")))))),
         React.createElement("div", { style: { ...styles.chartCard, borderLeft: `3px solid ${statusColor}` } },
             React.createElement("div", { style: styles.propStatusRow },
                 React.createElement("div", null,
@@ -861,12 +977,10 @@ function PropFirm({ propStats, settings, onChange }) {
             React.createElement(StatCard, { label: "Daily loss limit", value: formatMoney(ps.dailyLossLimit, 0), sub: `${settings.propDailyLossPct}% per day` }),
             React.createElement(StatCard, { label: "Max drawdown", value: formatMoney(ps.maxDDLimit, 0), sub: `${settings.propMaxDDPct}% static · floor ${formatMoney(ps.ddFloor, 0)}` })),
         React.createElement("div", { style: styles.chartCard },
-            React.createElement("div", { style: styles.chartTitle }, "Rule usage"),
-            React.createElement("div", { style: styles.chartSub }, "How close you came to each limit at the worst point"),
+            React.createElement("div", { style: styles.chartTitle }, "Historical rule usage"),
+            React.createElement("div", { style: styles.chartSub }, "Worst points across all imported trades"),
             React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 18, marginTop: 16 } },
-                React.createElement(RuleBar, { label: "Profit target progress", value: ps.finalProfit > 0 ? formatMoney(ps.finalProfit) : '—', limit: formatMoney(ps.profitTarget, 0), pct: ps.profitProgressPct, color: "#7fb069", inverted: true }),
-                React.createElement(RuleBar, { label: "Max drawdown used", value: formatMoney(ps.maxDDHit), limit: formatMoney(ps.maxDDLimit, 0), pct: ps.ddUsedPct, color: ps.ddUsedPct >= 100 ? '#d96459' : ps.ddUsedPct >= 75 ? '#c9a96b' : '#7fb069' }),
-                React.createElement(RuleBar, { label: "Daily loss", value: ps.worstDailyLoss < 0 ? formatMoney(ps.worstDailyLoss) : 'None', limit: formatMoney(ps.dailyLossLimit, 0), pct: ps.dailyLossUsedPct, color: ps.dailyLossUsedPct >= 100 ? '#d96459' : ps.dailyLossUsedPct >= 75 ? '#c9a96b' : '#7fb069' }))),
+                React.createElement(RuleBar, { label: "Profit target progress", value: ps.finalProfit > 0 ? formatMoney(ps.finalProfit) : '—', limit: formatMoney(ps.profitTarget, 0), pct: ps.profitProgressPct, color: "#7fb069", inverted: true }))),
         React.createElement("div", { style: styles.chartCard },
             React.createElement("div", { style: styles.chartHeader },
                 React.createElement("div", null,
@@ -918,15 +1032,7 @@ function PropFirm({ propStats, settings, onChange }) {
                         React.createElement("input", { type: "number", step: "0.1", value: settings.propMaxDDPct, onChange: e => onChange({ ...settings, propMaxDDPct: parseFloat(e.target.value) || 0 }), style: styles.input })),
                     React.createElement("label", { style: styles.label },
                         "Profit split (%)",
-                        React.createElement("input", { type: "number", step: "1", value: settings.propProfitSplitPct, onChange: e => onChange({ ...settings, propProfitSplitPct: parseFloat(e.target.value) || 0 }), style: styles.input }))))),
-        React.createElement("div", { style: styles.chartCard },
-            React.createElement("div", { style: styles.chartTitle }, "Reading this"),
-            React.createElement("div", { style: { ...styles.helpText, marginTop: 8 } },
-                "The simulation replays your actual paper trades on a ",
-                formatMoney(ps.size, 0),
-                " account at the same position sizes, checking after each trade whether you'd have breached a rule. Static drawdown means the floor never moves up \u2014 it stays fixed at ",
-                formatMoney(ps.ddFloor, 0),
-                " regardless of how high your equity climbs. One bad day or one bad streak that takes equity below that floor ends the account immediately."))));
+                        React.createElement("input", { type: "number", step: "1", value: settings.propProfitSplitPct, onChange: e => onChange({ ...settings, propProfitSplitPct: parseFloat(e.target.value) || 0 }), style: styles.input })))))));
 }
 function RuleBar({ label, value, limit, pct, color, inverted }) {
     const clamped = Math.max(0, Math.min(100, pct));
@@ -1029,6 +1135,17 @@ const styles = {
     propBreachDetail: { fontSize: 12, color: '#a8a399', marginTop: 12, lineHeight: 1.5, maxWidth: 520 },
     propTargetDetail: { fontSize: 12, color: '#9bc785', marginTop: 12, lineHeight: 1.5, maxWidth: 520 },
     propPayoutBox: { textAlign: 'right', minWidth: 180 },
+    dailyCard: {
+        display: 'flex', gap: 32, alignItems: 'stretch', flexWrap: 'wrap',
+        background: '#15130f', border: '1px solid rgba(201,169,107,0.2)',
+        borderLeft: '3px solid #c9a96b', padding: 20,
+    },
+    dailyLeft: { display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 160 },
+    utcDate: { fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a564c', marginBottom: 8 },
+    utcClock: { fontFamily: 'JetBrains Mono, monospace', fontSize: 36, fontWeight: 500, color: '#e8e6df', letterSpacing: '-0.02em', lineHeight: 1 },
+    utcLabel: { fontSize: 12, color: '#5a564c', letterSpacing: '0.1em' },
+    resetLabel: { fontSize: 10, color: '#5a564c', marginTop: 10, letterSpacing: '0.06em', fontFamily: 'JetBrains Mono, monospace' },
+    dailyRight: { flex: 1, minWidth: 260, borderLeft: '1px solid #1f1d18', paddingLeft: 32 },
     chartHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
     chartTitle: { fontFamily: 'Fraunces, serif', fontSize: 17, fontWeight: 600, color: '#e8e6df', letterSpacing: '-0.01em' },
     chartSub: { fontSize: 11, color: '#6a665b', marginTop: 4, marginBottom: 8 },
