@@ -191,25 +191,89 @@ function parseCSV(txt) {
     return lines.slice(1).map(l => { const o = {}; sp(l).forEach((v, i) => { var _a; return o[(_a = h[i]) !== null && _a !== void 0 ? _a : `_${i}`] = v; }); return o; });
 }
 function normFill(r) {
-    return { sym: r.symbol || r.instrument || '', side: (r.side || r.action || r.type || '').toLowerCase().includes('sell') ? 'sell' : 'buy', qty: parseFloat(r.qty || r.quantity || r.size || r.filledqty || '0') || 0, price: parseFloat(r.fillprice || r.price || r.avgfillprice || r.executionprice || '0') || 0, time: (s => (s ? new Date(s).getTime() : NaN))(r.closingtime || r.fillingtime || r.placingtime || r.time || r.date || r.executiontime || ''), status: (r.status || '').toLowerCase() };
+    return { sym: r.symbol || r.instrument || '', side: (r.side || r.action || r.type || '').toLowerCase().includes('sell') ? 'sell' : 'buy', qty: parseFloat(r.qty || r.quantity || r.size || r.filledqty || '0') || 0, price: parseFloat(r.fillprice || r.price || r.avgfillprice || r.executionprice || '0') || 0, time: (s => (s ? new Date(s).getTime() : NaN))(r.closingtime || r.fillingtime || r.placingtime || r.time || r.date || r.executiontime || ''), status: (r.status || '').toLowerCase(), orderId: r.orderid || r.id || '' };
 }
+// ─── Trade pairing ────────────────────────────────────────────────────────────
+// TradingView bracket orders: entry + exit are placed simultaneously and have
+// consecutive Order IDs (gap usually 1-3, occasionally up to a few thousand).
+// We pair by Order ID proximity first (bracket matching), then fall back to
+// FIFO for standalone entries/exits placed at different times.
 function pairFills(fills) {
-    const valid = fills.filter(f => f.sym && f.qty > 0 && f.price > 0 && !isNaN(f.time)).filter(f => !f.status || f.status.includes('fill') || f.status === 'closed' || f.status === '').sort((a, b) => a.time - b.time);
-    const trades = [], open = {};
-    for (const f of valid) {
+    // Filter to valid filled orders only
+    const valid = fills
+        .filter(f => f.sym && f.qty > 0 && f.price > 0 && !isNaN(f.time))
+        .filter(f => !f.status || f.status.includes('fill') || f.status === 'closed' || f.status === '');
+    // Sort by order ID for bracket matching
+    const byId = [...valid].sort((a, b) => parseInt(a.orderId || '0') - parseInt(b.orderId || '0'));
+    const BRACKET_GAP = 10000; // Order IDs within this range = same bracket
+    const used = new Set();
+    const trades = [];
+    // Pass 1: pair bracket orders (consecutive IDs, same symbol, opposite sides)
+    for (let i = 0; i < byId.length; i++) {
+        if (used.has(i))
+            continue;
+        const a = byId[i];
+        const aId = parseInt(a.orderId || '0');
+        if (!aId)
+            continue;
+        for (let j = i + 1; j < byId.length; j++) {
+            if (used.has(j))
+                continue;
+            const b = byId[j];
+            const bId = parseInt(b.orderId || '0');
+            if (bId - aId > BRACKET_GAP)
+                break;
+            if (b.sym === a.sym && b.side !== a.side) {
+                used.add(i);
+                used.add(j);
+                // Lower order ID = entry order
+                const entry = aId <= bId ? a : b;
+                const exit = aId <= bId ? b : a;
+                const long = entry.side === 'buy';
+                const pnl = long
+                    ? (exit.price - entry.price) * entry.qty
+                    : (entry.price - exit.price) * entry.qty;
+                const rMult = (exit.price - entry.price) / entry.price * (long ? 1 : -1);
+                trades.push({
+                    id: `${a.sym}-${entry.orderId}-${exit.orderId}`,
+                    symbol: a.sym, direction: long ? 'long' : 'short',
+                    qty: entry.qty, entryPrice: entry.price, exitPrice: exit.price,
+                    entryTime: entry.time, exitTime: exit.time,
+                    pnl, rMultiple: rMult, pnlPct: rMult * 100,
+                });
+                break;
+            }
+        }
+    }
+    // Pass 2: FIFO for remaining unpaired fills (standalone entries/exits)
+    const remaining = byId
+        .filter((_, i) => !used.has(i))
+        .sort((a, b) => a.time - b.time);
+    const open = {};
+    for (const f of remaining) {
         open[f.sym] = open[f.sym] || [];
         const lots = open[f.sym];
         let rem = f.qty;
         while (rem > 0 && lots.length && lots[0].side !== f.side) {
-            const l = lots[0], mq = Math.min(rem, l.qty), long = l.side === 'buy', pnl = long ? (f.price - l.price) * mq : (l.price - f.price) * mq, rm = (f.price - l.price) / l.price * (long ? 1 : -1);
-            trades.push({ id: `${f.sym}-${l.time}-${f.time}-${trades.length}`, symbol: f.sym, direction: long ? 'long' : 'short', qty: mq, entryPrice: l.price, exitPrice: f.price, entryTime: l.time, exitTime: f.time, pnl, rMultiple: rm, pnlPct: rm * 100 });
-            l.qty -= mq;
+            const lot = lots[0];
+            const mq = Math.min(rem, lot.qty);
+            const long = lot.side === 'buy';
+            const pnl = long ? (f.price - lot.price) * mq : (lot.price - f.price) * mq;
+            const rMult = (f.price - lot.price) / lot.price * (long ? 1 : -1);
+            trades.push({
+                id: `${f.sym}-${lot.orderId || lot.time}-${f.orderId || f.time}-${trades.length}`,
+                symbol: f.sym, direction: long ? 'long' : 'short',
+                qty: mq, entryPrice: lot.price, exitPrice: f.price,
+                entryTime: lot.time, exitTime: f.time,
+                pnl, rMultiple: rMult, pnlPct: rMult * 100,
+            });
+            lot.qty -= mq;
             rem -= mq;
-            if (l.qty <= 1e-8)
+            if (lot.qty <= 1e-8)
                 lots.shift();
         }
         if (rem > 0)
-            lots.push({ side: f.side, qty: rem, price: f.price, time: f.time });
+            lots.push({ side: f.side, qty: rem, price: f.price, time: f.time, orderId: f.orderId });
     }
     return trades.sort((a, b) => a.exitTime - b.exitTime);
 }
