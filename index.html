@@ -162,7 +162,7 @@ const C = {
     sans: '"DM Sans", "Inter", system-ui, sans-serif',
 };
 // ─── Storage ──────────────────────────────────────────────────────────────────
-const SK = 'trades:v1', SS = 'settings:v1', SM = 'metadata:v1', SB = 'balance:v1';
+const SK = 'trades:v1', SS = 'settings:v1', SM = 'metadata:v1', SB = 'balance:v1', SI = 'lastimport:v1';
 const DEF = {
     startingBalance: 10000, riskPerTrade: 10, feeRate: 0.04,
     propAccountSize: 5000, propProfitTargetPct: 10, propDailyLossPct: 3,
@@ -216,8 +216,28 @@ function pairFills(fills) {
 // ─── Balance history parser ────────────────────────────────────────────────────
 // TradingView paper-trading-balance-history CSV:
 //   Time, Balance Before, Balance After, Realized P&L (value), Realized P&L (currency), Action
-// The Action field contains unquoted commas so we parse positionally by column index.
-// We only keep rows where Action is an enter/close position or commission — nothing else.
+// Action field is quoted when it contains commas e.g.:
+//   "Close short position ... currency: USDT, rate: 1.000300, point value: 1.000000"
+// We use the same quoted-aware splitter as parseCSV.
+function splitCSVRow(row) {
+    const out = [];
+    let cur = '', q = false;
+    for (let i = 0; i < row.length; i++) {
+        const c = row[i];
+        if (c === '"') {
+            q = !q;
+            continue;
+        }
+        if (c === ',' && !q) {
+            out.push(cur.trim());
+            cur = '';
+            continue;
+        }
+        cur += c;
+    }
+    out.push(cur.trim());
+    return out;
+}
 function isBalanceHistoryCSV(txt) {
     const first = txt.trim().split(/\r?\n/)[0] || '';
     const h = first.toLowerCase().replace(/[^a-z0-9,]/g, '');
@@ -226,7 +246,6 @@ function isBalanceHistoryCSV(txt) {
 function parseDate(s) {
     if (!s)
         return NaN;
-    // Handle "2026-04-22 22:42:04" — replace space with T so all browsers parse it
     return new Date(s.trim().replace(' ', 'T')).getTime();
 }
 function parseBalanceHistoryCSV(txt) {
@@ -237,27 +256,20 @@ function parseBalanceHistoryCSV(txt) {
     for (const line of lines.slice(1)) {
         if (!line.trim())
             continue;
-        // Columns: 0=Time, 1=Balance Before, 2=Balance After, 3=P&L value, 4=Currency, 5+=Action
-        const parts = line.split(',');
-        if (parts.length < 5)
+        const parts = splitCSVRow(line);
+        if (parts.length < 3)
             continue;
-        // Action text starts at col 5 — join everything from there back into one string
-        const action = parts.slice(5).join(',').trim().toLowerCase();
-        // Only keep rows that are trade entries, exits, or their commissions
-        const isPosition = action.startsWith('close') || action.startsWith('enter');
-        const isCommission = action.startsWith('commission for: close') || action.startsWith('commission for: enter');
-        if (!isPosition && !isCommission)
-            continue;
+        // Col 0=Time, Col 1=Balance Before, Col 2=Balance After, Col 3=P&L, Col 4=Currency, Col 5=Action
         const ts = parseDate(parts[0]);
-        const equity = parseFloat(parts[2].trim());
-        const pnl = parseFloat(parts[3].trim()) || 0;
+        const equity = parseFloat(parts[2]);
+        const pnl = parseFloat(parts[3]) || 0;
         if (!isNaN(ts) && isFinite(equity) && equity > 0) {
             entries.push({ time: ts, balance: equity, equity, pnl });
         }
     }
     return entries.sort((a, b) => a.time - b.time);
 }
-// For order history (standard CSV)
+// For order history CSVs
 function detectCSVType(rows) {
     if (!rows.length)
         return 'unknown';
@@ -304,6 +316,8 @@ function App() {
     const [fDir, setFDir] = useState('all');
     const [fSetup, setFSetup] = useState('all');
     const [editing, setEditing] = useState(null);
+    const [dragging, setDragging] = useState(false);
+    const [lastImport, setLastImport] = useState(null); // {date, newCount, totalCount}
     const fileRef = useRef(null);
     useEffect(() => {
         try {
@@ -330,6 +344,12 @@ function App() {
                 setBalanceHistory(JSON.parse(b));
         }
         catch (_d) { }
+        try {
+            const i = localStorage.getItem(SI);
+            if (i)
+                setLastImport(JSON.parse(i));
+        }
+        catch (_e) { }
     }, []);
     const saveT = n => { setTrades(n); try {
         localStorage.setItem(SK, JSON.stringify(n));
@@ -347,55 +367,111 @@ function App() {
         localStorage.setItem(SB, JSON.stringify(n));
     }
     catch (_a) { } };
+    const saveLastImport = n => { setLastImport(n); try {
+        localStorage.setItem(SI, JSON.stringify(n));
+    }
+    catch (_a) { } };
     const upMeta = (id, p) => saveM({ ...meta, [id]: { ...(meta[id] || {}), ...p } });
-    const handleFile = async (e) => {
-        var _a;
-        const file = (_a = e.target.files) === null || _a === void 0 ? void 0 : _a[0];
-        if (!file)
-            return;
+    // Keyboard shortcut: press I to open file picker
+    useEffect(() => {
+        const onKey = e => {
+            var _a;
+            if (e.key === 'i' && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+                const tag = (e.target).tagName;
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT')
+                    return;
+                (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click();
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
+    // Global drag-and-drop — drop a CSV anywhere on the page
+    useEffect(() => {
+        const onDragOver = e => { e.preventDefault(); setDragging(true); };
+        const onDragLeave = e => { if (!e.relatedTarget)
+            setDragging(false); };
+        const onDrop = async (e) => {
+            var _a;
+            e.preventDefault();
+            setDragging(false);
+            const file = (_a = e.dataTransfer.files) === null || _a === void 0 ? void 0 : _a[0];
+            if (!file)
+                return;
+            if (!file.name.endsWith('.csv') && !file.type.includes('csv')) {
+                setMsg({ t: 'err', s: 'Please drop a CSV file.' });
+                return;
+            }
+            await processFile(file);
+        };
+        window.addEventListener('dragover', onDragOver);
+        window.addEventListener('dragleave', onDragLeave);
+        window.addEventListener('drop', onDrop);
+        return () => {
+            window.removeEventListener('dragover', onDragOver);
+            window.removeEventListener('dragleave', onDragLeave);
+            window.removeEventListener('drop', onDrop);
+        };
+    }, [trades]); // re-bind when trades changes so processFile closure is fresh
+    const processFile = async (file) => {
         const txt = await file.text();
         try {
-            // Check for balance history BEFORE parsing as CSV, because the Action
-            // field contains unquoted commas that break standard CSV column mapping.
             if (isBalanceHistoryCSV(txt)) {
                 const entries = parseBalanceHistoryCSV(txt);
                 if (!entries.length) {
                     setMsg({ t: 'err', s: 'No valid balance entries found. Check this is a TradingView Balance History export.' });
-                    e.target.value = '';
                     return;
                 }
                 saveBal(entries);
-                setMsg({ t: 'ok', s: `Imported balance history: ${entries.length} entries. Equity curve now uses real account balance.` });
-                e.target.value = '';
+                const now = new Date();
+                saveLastImport({ date: now.toISOString(), type: 'balance', newCount: entries.length, totalCount: entries.length });
+                setMsg({ t: 'ok', s: `✓ Balance history imported: ${entries.length} entries. Equity curve now uses real account balance.` });
                 return;
             }
-            // Fall through to order history parsing
             const rows = parseCSV(txt);
             if (!rows.length) {
                 setMsg({ t: 'err', s: 'Empty or unreadable CSV file.' });
-                e.target.value = '';
                 return;
             }
             const type = detectCSVType(rows);
             if (type === 'orders') {
                 const nt = pairFills(rows.map(normFill));
                 if (!nt.length) {
-                    setMsg({ t: 'err', s: 'No valid trades found — use TradingView Order History export.' });
-                    e.target.value = '';
+                    setMsg({ t: 'err', s: 'No valid trades found — check this is a TradingView Order History export.' });
                     return;
                 }
-                const m = new Map(trades.map(t => [t.id, t]));
-                nt.forEach(t => m.set(t.id, t));
-                saveT(Array.from(m.values()).sort((a, b) => a.exitTime - b.exitTime));
-                setMsg({ t: 'ok', s: `Imported order history: ${nt.length} trade${nt.length === 1 ? '' : 's'}.` });
+                // Diff: count genuinely new trades vs already existing
+                const existingIds = new Set(trades.map(t => t.id));
+                const brandNew = nt.filter(t => !existingIds.has(t.id));
+                const merged = new Map(trades.map(t => [t.id, t]));
+                nt.forEach(t => merged.set(t.id, t));
+                const mergedArr = Array.from(merged.values()).sort((a, b) => a.exitTime - b.exitTime);
+                saveT(mergedArr);
+                const now = new Date();
+                const li = { date: now.toISOString(), type: 'orders', newCount: brandNew.length, totalCount: mergedArr.length, fileName: file.name };
+                saveLastImport(li);
+                if (brandNew.length === 0) {
+                    setMsg({ t: 'ok', s: `✓ No new trades — all ${nt.length} trades already in journal.` });
+                }
+                else {
+                    const newest = brandNew.reduce((a, t) => t.exitTime > a ? t.exitTime : a, 0);
+                    setMsg({ t: 'ok', s: `✓ ${brandNew.length} new trade${brandNew.length === 1 ? '' : 's'} added · ${mergedArr.length} total · newest: ${fdateS(newest)}` });
+                }
             }
             else {
-                setMsg({ t: 'err', s: 'Unrecognised CSV format. Import either Order History or Balance History from TradingView.' });
+                setMsg({ t: 'err', s: 'Unrecognised CSV. Drop an Order History or Balance History export from TradingView.' });
             }
         }
         catch (err) {
             setMsg({ t: 'err', s: 'Parse error: ' + err.message });
         }
+    };
+    const handleFile = async (e) => {
+        var _a;
+        const file = (_a = e.target.files) === null || _a === void 0 ? void 0 : _a[0];
+        if (!file)
+            return;
+        await processFile(file);
         e.target.value = '';
     };
     const clearAll = () => { if (!confirm('Delete all trades, notes and balance history?'))
@@ -617,16 +693,24 @@ function App() {
             React.createElement("div", { style: { height: 54, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0 } },
                 React.createElement("div", { style: { fontWeight: 700, fontSize: 18, color: C.text, flex: 1 } }, tab.charAt(0).toUpperCase() + tab.slice(1).replace('propfirm', 'Prop Firm')),
                 trades.length > 0 && React.createElement("div", { style: { display: 'flex', gap: 8, alignItems: 'center' } }, [['Symbol', fSym, setFSym, [['all', 'All symbols'], ...symbols.map(s => [s, s])]], ['Direction', fDir, setFDir, [['all', 'All'], ['long', 'Longs'], ['short', 'Shorts']]], ['Setup', fSetup, setFSetup, [['all', 'All setups'], ...SETUPS.map(s => [s, s])]]].map(([label, val, set, opts]) => (React.createElement("select", { key: label, value: val, onChange: e => set(e.target.value), style: { background: C.card, border: `1px solid ${C.border2}`, color: C.text, padding: '5px 10px', fontSize: 11, fontFamily: C.sans, borderRadius: 5, cursor: 'pointer', outline: 'none' } }, opts.map(([v, l]) => React.createElement("option", { key: v, value: v }, l)))))),
-                React.createElement("div", { style: { display: 'flex', gap: 8 } },
-                    React.createElement("button", { onClick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, style: btnStyle },
+                React.createElement("div", { style: { display: 'flex', gap: 8, alignItems: 'center' } },
+                    lastImport && (React.createElement("div", { style: { fontSize: 10, color: C.textDim, fontFamily: C.mono, borderRight: `1px solid ${C.border}`, paddingRight: 10, whiteSpace: 'nowrap' } },
+                        "Last import: ",
+                        React.createElement("span", { style: { color: C.text } }, new Date(lastImport.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })),
+                        lastImport.newCount > 0 && React.createElement("span", { style: { color: C.green, marginLeft: 6 } },
+                            "+",
+                            lastImport.newCount,
+                            " new"))),
+                    React.createElement("button", { onClick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, style: btnStyle, title: "Import CSV (or press I, or drag & drop anywhere)" },
                         React.createElement(IconImport, { size: 13 }),
-                        " Import"),
+                        " Import ",
+                        React.createElement("span", { style: { fontSize: 9, color: C.textFaint, marginLeft: 2 } }, "[I]")),
                     React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: 'none' } }),
                     balanceHistory.length > 0 && (React.createElement("div", { style: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: 'rgba(91,141,238,0.12)', border: '1px solid rgba(91,141,238,0.35)', borderRadius: 5, fontSize: 10, color: '#7aabff', fontWeight: 600, letterSpacing: '0.06em' } },
                         "\u2B21 BALANCE ",
                         balanceHistory.length,
                         " pts",
-                        React.createElement("button", { onClick: () => { if (confirm('Remove balance history? Equity curve will revert to order-based reconstruction.'))
+                        React.createElement("button", { onClick: () => { if (confirm('Remove balance history?'))
                                 saveBal([]); }, style: { background: 'none', border: 'none', color: '#7aabff', cursor: 'pointer', padding: '0 0 0 2px', fontSize: 13, lineHeight: 1, opacity: 0.6 } }, "\u00D7"))),
                     React.createElement("button", { onClick: doExport, disabled: !trades.length, style: btnStyle },
                         React.createElement(IconExport, { size: 13 }),
@@ -636,13 +720,18 @@ function App() {
             msg && React.createElement("div", { style: { padding: '8px 20px', fontSize: 12, background: msg.t === 'ok' ? 'rgba(76,175,125,0.1)' : 'rgba(224,82,82,0.1)', borderBottom: `1px solid ${msg.t === 'ok' ? C.greenBd : C.redBd}`, color: msg.t === 'ok' ? C.green : C.red, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 } },
                 msg.s,
                 React.createElement("button", { onClick: () => setMsg(null), style: { marginLeft: 'auto', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, lineHeight: 1 } }, "\u00D7")),
-            React.createElement("div", { style: { flex: 1, overflowY: 'auto', overflowX: 'hidden' } }, !trades.length ? React.createElement(EmptyState, { onPick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, sett: sett, setSett: saveS }) : (React.createElement(React.Fragment, null,
+            React.createElement("div", { style: { flex: 1, overflowY: 'auto', overflowX: 'hidden', position: 'relative' } }, !trades.length ? React.createElement(EmptyState, { onPick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, sett: sett, setSett: saveS }) : (React.createElement(React.Fragment, null,
                 tab === 'dashboard' && statsWithBalance && React.createElement(Dashboard, { stats: statsWithBalance, sett: sett, dailyPnl: balanceDailyPnl || dailyPnl, dailyCount: dailyCount, recentTrades: sortedTrades.slice(0, 10), onEdit: setEditing }),
                 tab === 'analytics' && statsWithBalance && React.createElement(Analytics, { stats: statsWithBalance, sessionStats: sessionStats, hourStats: hourStats, setupStats: setupStats, execStats: execStats, weeklyStats: weeklyStats }),
                 tab === 'calendar' && React.createElement(CalendarTab, { dailyPnl: dailyPnl, dailyCount: dailyCount, trades: filtered }),
                 tab === 'trades' && React.createElement(TradesTab, { trades: sortedTrades, sk: sk, sd: sd, doSort: doSort, onEdit: setEditing }),
                 tab === 'propfirm' && propStats && React.createElement(PropFirmTab, { ps: propStats, sett: sett, setSett: saveS, trades: filtered }),
                 tab === 'settings' && React.createElement(SettingsTab, { sett: sett, setSett: saveS }))))),
+        dragging && (React.createElement("div", { style: { position: 'fixed', inset: 0, background: 'rgba(11,25,41,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, pointerEvents: 'none', border: `3px dashed ${C.blue}`, borderRadius: 0 } },
+            React.createElement("div", { style: { textAlign: 'center' } },
+                React.createElement("div", { style: { fontSize: 48, marginBottom: 16 } }, "\uD83D\uDCC2"),
+                React.createElement("div", { style: { fontFamily: C.mono, fontSize: 20, fontWeight: 700, color: C.blue, letterSpacing: '0.04em' } }, "Drop CSV to import"),
+                React.createElement("div", { style: { fontSize: 13, color: C.textDim, marginTop: 8 } }, "Order History or Balance History")))),
         editing && React.createElement(EditModal, { trade: editing, meta: meta[editing.id] || {}, onSave: p => { upMeta(editing.id, p); setEditing(null); }, onClose: () => setEditing(null) })));
 }
 const btnStyle = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: C.card, border: `1px solid ${C.border2}`, color: C.text, fontSize: 11, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5, fontWeight: 500 };
