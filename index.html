@@ -333,20 +333,101 @@ function parseBalanceHistoryCSV(txt) {
     }
     return entries.sort((a, b) => a.time - b.time);
 }
-// For order history CSVs
-function detectCSVType(rows) {
-    if (!rows.length)
-        return 'unknown';
-    const keys = Object.keys(rows[0]);
-    const hasSide = keys.some(k => k === 'side');
-    const hasSymbol = keys.some(k => k === 'symbol' || k === 'instrument');
-    const hasPrice = keys.some(k => k.includes('price') || k === 'fillprice');
-    if (hasSide && hasSymbol)
-        return 'orders';
-    if (hasPrice && hasSymbol)
-        return 'orders';
-    return 'unknown';
+// Parse the Action text from a balance history row into structured data
+function parseBalanceAction(action) {
+    const a = (action || '').trim();
+    if (!a)
+        return { type: 'other' };
+    if (/^commission for:/i.test(a)) {
+        const inner = a.slice(15).trim();
+        const m = inner.match(/^Close (long|short) position for symbol (\S+) at price ([\d.]+) for ([\d.]+)/i);
+        if (m)
+            return { type: 'commission_close', direction: m[1].toLowerCase(), symbol: m[2], exitPrice: parseFloat(m[3]), qty: parseFloat(m[4]) };
+        return { type: 'commission_enter' };
+    }
+    const closeM = a.match(/^Close (long|short) position for symbol (\S+) at price ([\d.]+) for ([\d.]+) units\. Position AVG Price was ([\d.]+)/i);
+    if (closeM)
+        return { type: 'close', direction: closeM[1].toLowerCase(), symbol: closeM[2], exitPrice: parseFloat(closeM[3]), qty: parseFloat(closeM[4]), entryPrice: parseFloat(closeM[5]) };
+    const enterM = a.match(/^Enter position for symbol (\S+) at price ([\d.]+) for ([\d.]+)/i);
+    if (enterM)
+        return { type: 'enter', symbol: enterM[1], entryPrice: parseFloat(enterM[2]), qty: parseFloat(enterM[3]) };
+    return { type: 'other' };
 }
+// Convert balance history rows into trade objects (replaces pairFills for balance imports)
+// Returns { trades, balancePoints } where balancePoints is [{time, equity}]
+function balanceHistoryToTrades(txt) {
+    const lines = txt.trim().split(/\r?\n/);
+    if (lines.length < 2)
+        return { trades: [], balancePoints: [] };
+    const rows = [];
+    for (const line of lines.slice(1)) {
+        if (!line.trim())
+            continue;
+        const parts = splitCSVRow(line);
+        if (parts.length < 5)
+            continue;
+        const ts = parseDate(parts[0]);
+        const balAfter = parseFloat(parts[2]);
+        const pnlVal = parseFloat(parts[3]) || 0;
+        const action = parts[5] || '';
+        if (!isNaN(ts) && isFinite(balAfter)) {
+            rows.push({ ts, balAfter, pnlVal, action, parsed: parseBalanceAction(action) });
+        }
+    }
+    // Build equity curve from all rows
+    const balancePoints = rows.map(r => ({ time: r.ts, equity: r.balAfter })).sort((a, b) => a.time - b.time);
+    // Extract trades: each 'close' row followed by its 'commission_close' row
+    const trades = [];
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.parsed.type !== 'close')
+            continue;
+        const p = row.parsed;
+        // Look at next row for matching commission (same symbol, same exit price)
+        let commission = 0;
+        if (i + 1 < rows.length) {
+            const next = rows[i + 1];
+            if (next.parsed.type === 'commission_close' &&
+                next.parsed.symbol === p.symbol &&
+                Math.abs((next.parsed.exitPrice || 0) - p.exitPrice) < 0.01) {
+                commission = Math.abs(next.pnlVal);
+                i++; // consume commission row
+            }
+        }
+        const grossPnl = row.pnlVal; // exact from TradingView
+        const rMult = p.entryPrice > 0
+            ? (p.exitPrice - p.entryPrice) / p.entryPrice * (p.direction === 'long' ? 1 : -1)
+            : 0;
+        trades.push({
+            id: `bal-${p.symbol}-${row.ts}-${p.exitPrice}`,
+            symbol: p.symbol,
+            direction: p.direction,
+            qty: p.qty,
+            entryPrice: p.entryPrice,
+            exitPrice: p.exitPrice,
+            entryTime: row.ts, // exact entry time not in balance history; use close time
+            exitTime: row.ts,
+            pnl: grossPnl,
+            rMultiple: rMult,
+            pnlPct: rMult * 100,
+            // Mark as from balance history so fee override is handled separately
+            fromBalance: true,
+            commission, // exact commission from TradingView
+        });
+    }
+    return { trades: trades.sort((a, b) => a.exitTime - b.exitTime), balancePoints };
+}
+if (!rows.length)
+    return 'unknown';
+const keys = Object.keys(rows[0]);
+const hasSide = keys.some(k => k === 'side');
+const hasSymbol = keys.some(k => k === 'symbol' || k === 'instrument');
+const hasPrice = keys.some(k => k.includes('price') || k === 'fillprice');
+if (hasSide && hasSymbol)
+    return 'orders';
+if (hasPrice && hasSymbol)
+    return 'orders';
+return 'unknown';
 const f$ = (n, dp = 2) => { if (n == null || !isFinite(n))
     return '—'; const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }); return (n < 0 ? '-$' : '$') + s; };
 const fpct = (n, dp = 1) => { if (n == null || !isFinite(n))
@@ -363,6 +444,13 @@ const sessionOf = ts => { const h = new Date(ts).getUTCHours(); if (h < 7)
     return 'Overlap'; if (h < 21)
     return 'NY'; return 'After'; };
 function addFees(t, r) {
+    // Trades from balance history have exact TradingView commission already
+    if (t.fromBalance && t.commission != null) {
+        const net = t.pnl - t.commission;
+        const fcp = t.entryPrice > 0 ? t.commission / (t.entryPrice * t.qty) * 100 : 0;
+        return { ...t, fees: t.commission, pnlNet: net, pnlPctNet: t.pnlPct - fcp, rMultipleNet: t.rMultiple - fcp / 100 };
+    }
+    // Order-history trades: calculate fee from rate
     const fee = (t.entryPrice + t.exitPrice) * t.qty * (r / 100), net = t.pnl - fee, fcp = t.entryPrice > 0 ? fee / (t.entryPrice * t.qty) * 100 : 0;
     return { ...t, fees: fee, pnlNet: net, pnlPctNet: t.pnlPct - fcp, rMultipleNet: t.rMultiple - fcp / 100 };
 }
@@ -481,15 +569,22 @@ function App() {
         const txt = await file.text();
         try {
             if (isBalanceHistoryCSV(txt)) {
-                const entries = parseBalanceHistoryCSV(txt);
-                if (!entries.length) {
-                    setMsg({ t: 'err', s: 'No valid balance entries found. Check this is a TradingView Balance History export.' });
+                const { trades: balTrades, balancePoints } = balanceHistoryToTrades(txt);
+                if (!balTrades.length && !balancePoints.length) {
+                    setMsg({ t: 'err', s: 'No valid data found. Check this is a TradingView Balance History export.' });
                     return;
                 }
-                saveBal(entries);
+                // Merge balance-derived trades with existing (dedupe by id)
+                const existingIds = new Set(trades.map(t => t.id));
+                const brandNew = balTrades.filter(t => !existingIds.has(t.id));
+                const merged = new Map(trades.map(t => [t.id, t]));
+                balTrades.forEach(t => merged.set(t.id, t));
+                const mergedArr = Array.from(merged.values()).sort((a, b) => a.exitTime - b.exitTime);
+                saveT(mergedArr);
+                saveBal(balancePoints);
                 const now = new Date();
-                saveLastImport({ date: now.toISOString(), type: 'balance', newCount: entries.length, totalCount: entries.length });
-                setMsg({ t: 'ok', s: `✓ Balance history imported: ${entries.length} entries. Equity curve now uses real account balance.` });
+                saveLastImport({ date: now.toISOString(), type: 'balance', newCount: brandNew.length, totalCount: mergedArr.length, fileName: file.name });
+                setMsg({ t: 'ok', s: `✓ Balance history: ${balTrades.length} trades extracted · ${brandNew.length} new · ${balancePoints.length} equity points` });
                 return;
             }
             const rows = parseCSV(txt);
@@ -504,7 +599,6 @@ function App() {
                     setMsg({ t: 'err', s: 'No valid trades found — check this is a TradingView Order History export.' });
                     return;
                 }
-                // Diff: count genuinely new trades vs already existing
                 const existingIds = new Set(trades.map(t => t.id));
                 const brandNew = nt.filter(t => !existingIds.has(t.id));
                 const merged = new Map(trades.map(t => [t.id, t]));
