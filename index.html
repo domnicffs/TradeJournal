@@ -577,16 +577,19 @@ function App() {
                     setMsg({ t: 'err', s: 'No valid data found. Check this is a TradingView Balance History export.' });
                     return;
                 }
-                // Merge balance-derived trades with existing (dedupe by id)
-                const existingIds = new Set(trades.map(t => t.id));
-                const brandNew = balTrades.filter(t => !existingIds.has(t.id));
-                const merged = new Map(trades.map(t => [t.id, t]));
-                balTrades.forEach(t => merged.set(t.id, t));
-                const mergedArr = Array.from(merged.values()).sort((a, b) => a.exitTime - b.exitTime);
-                saveT(mergedArr);
+                // Merge balance-derived trades: deduplicate by symbol+exitPrice+day
+                // since order-history trades and balance-history trades for the same trade
+                // have different IDs but represent the same event
+                const dedupKey = t => `${t.symbol}|${t.exitPrice}|${isoDay(t.exitTime)}`;
+                const existingByKey = new Map(trades.map(t => [dedupKey(t), t]));
+                // Balance history trades take priority — remove any order-history duplicates
+                const orderOnlyTrades = trades.filter(t => !t.fromBalance && !balTrades.some(b => dedupKey(b) === dedupKey(t)));
+                const merged = [...orderOnlyTrades, ...balTrades].sort((a, b) => a.exitTime - b.exitTime);
+                const brandNew = balTrades.filter(t => !trades.some(e => dedupKey(e) === dedupKey(t)));
+                saveT(merged);
                 saveBal(balancePoints);
                 const now = new Date();
-                saveLastImport({ date: now.toISOString(), type: 'balance', newCount: brandNew.length, totalCount: mergedArr.length, fileName: file.name });
+                saveLastImport({ date: now.toISOString(), type: 'balance', newCount: brandNew.length, totalCount: merged.length, fileName: file.name });
                 setMsg({ t: 'ok', s: `✓ Balance history: ${balTrades.length} trades extracted · ${brandNew.length} new · ${balancePoints.length} equity points` });
                 return;
             }
@@ -602,10 +605,15 @@ function App() {
                     setMsg({ t: 'err', s: 'No valid trades found — check this is a TradingView Order History export.' });
                     return;
                 }
-                const existingIds = new Set(trades.map(t => t.id));
-                const brandNew = nt.filter(t => !existingIds.has(t.id));
+                const dedupKey = t => `${t.symbol}|${t.exitPrice}|${isoDay(t.exitTime)}`;
+                const existingKeys = new Set(trades.map(dedupKey));
+                const brandNew = nt.filter(t => !existingKeys.has(dedupKey(t)));
+                // Don't overwrite balance-history trades with order-history versions
+                const balTrades = trades.filter(t => t.fromBalance);
+                const balKeys = new Set(balTrades.map(dedupKey));
+                const ntFiltered = nt.filter(t => !balKeys.has(dedupKey(t)));
                 const merged = new Map(trades.map(t => [t.id, t]));
-                nt.forEach(t => merged.set(t.id, t));
+                ntFiltered.forEach(t => merged.set(t.id, t));
                 const mergedArr = Array.from(merged.values()).sort((a, b) => a.exitTime - b.exitTime);
                 saveT(mergedArr);
                 const now = new Date();
