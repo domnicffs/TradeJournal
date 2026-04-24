@@ -417,17 +417,20 @@ function balanceHistoryToTrades(txt) {
     }
     return { trades: trades.sort((a, b) => a.exitTime - b.exitTime), balancePoints };
 }
-if (!rows.length)
+// For order history CSVs
+function detectCSVType(rows) {
+    if (!rows.length)
+        return 'unknown';
+    const keys = Object.keys(rows[0]);
+    const hasSide = keys.some(k => k === 'side');
+    const hasSymbol = keys.some(k => k === 'symbol' || k === 'instrument');
+    const hasPrice = keys.some(k => k.includes('price') || k === 'fillprice');
+    if (hasSide && hasSymbol)
+        return 'orders';
+    if (hasPrice && hasSymbol)
+        return 'orders';
     return 'unknown';
-const keys = Object.keys(rows[0]);
-const hasSide = keys.some(k => k === 'side');
-const hasSymbol = keys.some(k => k === 'symbol' || k === 'instrument');
-const hasPrice = keys.some(k => k.includes('price') || k === 'fillprice');
-if (hasSide && hasSymbol)
-    return 'orders';
-if (hasPrice && hasSymbol)
-    return 'orders';
-return 'unknown';
+}
 const f$ = (n, dp = 2) => { if (n == null || !isFinite(n))
     return '—'; const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }); return (n < 0 ? '-$' : '$') + s; };
 const fpct = (n, dp = 1) => { if (n == null || !isFinite(n))
