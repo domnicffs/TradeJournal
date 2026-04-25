@@ -338,24 +338,22 @@ function parseBalanceAction(action) {
     const a = (action || '').trim();
     if (!a)
         return { type: 'other' };
-    if (/^commission for:/i.test(a)) {
-        const inner = a.slice(15).trim();
-        const m = inner.match(/^Close (long|short) position for symbol (\S+) at price ([\d.]+) for ([\d.]+)/i);
-        if (m)
-            return { type: 'commission_close', direction: m[1].toLowerCase(), symbol: m[2], exitPrice: parseFloat(m[3]), qty: parseFloat(m[4]) };
-        return { type: 'commission_enter' };
-    }
-    const closeM = a.match(/^Close (long|short) position for symbol (\S+) at price ([\d.]+) for ([\d.]+) units\. Position AVG Price was ([\d.]+)/i);
-    if (closeM)
-        return { type: 'close', direction: closeM[1].toLowerCase(), symbol: closeM[2], exitPrice: parseFloat(closeM[3]), qty: parseFloat(closeM[4]), entryPrice: parseFloat(closeM[5]) };
-    const enterM = a.match(/^Enter position for symbol (\S+) at price ([\d.]+) for ([\d.]+)/i);
+    // Action 1: "Commission for: Enter position for symbol X at price P for Q units"
+    const enterM = a.match(/^Commission for:\s*Enter position for symbol (\S+) at price ([\d.]+) for ([\d.]+)/i);
     if (enterM)
         return { type: 'enter', symbol: enterM[1], entryPrice: parseFloat(enterM[2]), qty: parseFloat(enterM[3]) };
+    // Action 2: "Close long/short position for symbol X at price P for Q units..."
+    const closeM = a.match(/^Close (long|short) position for symbol (\S+) at price ([\d.]+) for ([\d.]+)/i);
+    if (closeM)
+        return { type: 'close', direction: closeM[1].toLowerCase(), symbol: closeM[2], exitPrice: parseFloat(closeM[3]), qty: parseFloat(closeM[4]) };
     return { type: 'other' };
 }
-// Convert balance history rows into trade objects (replaces pairFills for balance imports)
-// Returns { trades, balancePoints } where balancePoints is [{time, equity}]
+// Build trades from balance history using only enter commissions + close rows.
+// Entry = "Commission for: Enter position" — exact entry time, price, qty
+// Exit  = "Close long/short position"     — exact exit time, price, direction
+// Fee   = 0.04% per leg (fixed)
 function balanceHistoryToTrades(txt) {
+    const FEE = 0.0004;
     const lines = txt.trim().split(/\r?\n/);
     if (lines.length < 2)
         return { trades: [], balancePoints: [] };
@@ -368,52 +366,60 @@ function balanceHistoryToTrades(txt) {
             continue;
         const ts = parseDate(parts[0]);
         const balAfter = parseFloat(parts[2]);
-        const pnlVal = parseFloat(parts[3]) || 0;
         const action = parts[5] || '';
         if (!isNaN(ts) && isFinite(balAfter)) {
-            rows.push({ ts, balAfter, pnlVal, action, parsed: parseBalanceAction(action) });
+            rows.push({ ts, balAfter, action, parsed: parseBalanceAction(action) });
         }
     }
-    // Build equity curve from all rows
+    // Equity curve from every row
     const balancePoints = rows.map(r => ({ time: r.ts, equity: r.balAfter })).sort((a, b) => a.time - b.time);
-    // Extract trades: each 'close' row followed by its 'commission_close' row
+    // Process chronologically (CSV is newest-first so reverse)
+    const chronological = [...rows].reverse();
+    // FIFO matching per symbol: enters queue up, closes drain them
+    const open = {}; // symbol -> [{ts, entryPrice, qty}]
     const trades = [];
-    for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        if (row.parsed.type !== 'close')
-            continue;
+    for (const row of chronological) {
         const p = row.parsed;
-        // Look at next row for matching commission (same symbol, same exit price)
-        let commission = 0;
-        if (i + 1 < rows.length) {
-            const next = rows[i + 1];
-            if (next.parsed.type === 'commission_close' &&
-                next.parsed.symbol === p.symbol &&
-                Math.abs((next.parsed.exitPrice || 0) - p.exitPrice) < 0.01) {
-                commission = Math.abs(next.pnlVal);
-                i++; // consume commission row
-            }
+        if (p.type === 'enter') {
+            if (!open[p.symbol])
+                open[p.symbol] = [];
+            open[p.symbol].push({ ts: row.ts, entryPrice: p.entryPrice, qty: p.qty });
         }
-        const grossPnl = row.pnlVal; // exact from TradingView
-        const rMult = p.entryPrice > 0
-            ? (p.exitPrice - p.entryPrice) / p.entryPrice * (p.direction === 'long' ? 1 : -1)
-            : 0;
-        trades.push({
-            id: `bal-${p.symbol}-${row.ts}-${p.exitPrice}`,
-            symbol: p.symbol,
-            direction: p.direction,
-            qty: p.qty,
-            entryPrice: p.entryPrice,
-            exitPrice: p.exitPrice,
-            entryTime: row.ts, // exact entry time not in balance history; use close time
-            exitTime: row.ts,
-            pnl: grossPnl,
-            rMultiple: rMult,
-            pnlPct: rMult * 100,
-            // Mark as from balance history so fee override is handled separately
-            fromBalance: true,
-            commission, // exact commission from TradingView
-        });
+        if (p.type === 'close') {
+            const lots = open[p.symbol] || [];
+            let rem = p.qty;
+            // Collect all lots consumed by this single close row
+            const consumed = [];
+            while (rem > 0 && lots.length > 0) {
+                const lot = lots[0];
+                const mq = Math.min(rem, lot.qty);
+                consumed.push({ entryPrice: lot.entryPrice, qty: mq, ts: lot.ts });
+                lot.qty -= mq;
+                rem -= mq;
+                if (lot.qty <= 1e-8)
+                    lots.shift();
+            }
+            if (consumed.length === 0)
+                continue;
+            // Merge into ONE trade with weighted average entry price
+            // (TradingView counts one close = one trade regardless of how many entries)
+            const totalQty = consumed.reduce((s, c) => s + c.qty, 0);
+            const avgEntry = consumed.reduce((s, c) => s + c.entryPrice * c.qty, 0) / totalQty;
+            const earliestEntry = Math.min(...consumed.map(c => c.ts));
+            const long = p.direction === 'long';
+            const gross = long ? (p.exitPrice - avgEntry) * totalQty : (avgEntry - p.exitPrice) * totalQty;
+            const fee = (avgEntry + p.exitPrice) * totalQty * FEE;
+            const rMult = avgEntry > 0 ? (p.exitPrice - avgEntry) / avgEntry * (long ? 1 : -1) : 0;
+            trades.push({
+                id: `bal-${p.symbol}-${earliestEntry}-${row.ts}-${trades.length}`,
+                symbol: p.symbol, direction: p.direction, qty: totalQty,
+                entryPrice: parseFloat(avgEntry.toFixed(8)),
+                exitPrice: p.exitPrice,
+                entryTime: earliestEntry, exitTime: row.ts,
+                pnl: gross, rMultiple: rMult, pnlPct: rMult * 100,
+                fromBalance: true, commission: fee,
+            });
+        }
     }
     return { trades: trades.sort((a, b) => a.exitTime - b.exitTime), balancePoints };
 }
