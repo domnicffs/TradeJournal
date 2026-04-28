@@ -139,32 +139,33 @@ const IconExport = p => React.createElement(Svg, { ...p },
 const IconTrash = p => React.createElement(Svg, { ...p },
     React.createElement("polyline", { points: "3 6 5 6 21 6" }),
     React.createElement("path", { d: "M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" }));
-// ─── Palette (exact Tradezella match) ─────────────────────────────────────────
+// ─── Palette (exact Tradezella dark match from screenshot) ────────────────────
 const C = {
-    bg: '#1a2035', // main page bg (sidebar)
-    main: '#1f2940', // content area bg
-    card: '#252f48', // card bg
-    cardHov: '#2a3550', // card hover
-    border: '#2e3c5a', // card borders
-    border2: '#364466', // lighter border
-    green: '#4caf7d', // profit green
-    greenBg: 'rgba(76,175,125,0.15)',
-    greenBd: 'rgba(76,175,125,0.35)',
+    bg: '#0d1117', // sidebar / topbar — near black
+    main: '#0f1520', // main content area
+    card: '#131c2e', // card backgrounds
+    cardHov: '#172035', // card hover state
+    border: '#1e2d45', // card borders
+    border2: '#243550', // slightly lighter border
+    green: '#26a65b', // profit green — slightly muted
+    greenBg: 'rgba(38,166,91,0.12)',
+    greenBd: 'rgba(38,166,91,0.3)',
     red: '#e05252', // loss red
-    redBg: 'rgba(224,82,82,0.15)',
-    redBd: 'rgba(224,82,82,0.35)',
-    yellow: '#f0b429',
-    blue: '#5b8dee',
-    text: '#e8eaf0', // primary text
-    textDim: '#8892a4', // secondary text
-    textFaint: '#4a5470', // very dim
+    redBg: 'rgba(224,82,82,0.12)',
+    redBd: 'rgba(224,82,82,0.3)',
+    yellow: '#e8a020', // fee / warning yellow
+    blue: '#4a7fd4', // accent blue (slightly muted for dark bg)
+    teal: '#26a65b',
+    text: '#c9d1d9', // primary text — slightly off-white like screenshot
+    textDim: '#6e7e94', // secondary text
+    textFaint: '#3d4f65', // very dim
     mono: '"DM Mono", "JetBrains Mono", monospace',
     sans: '"DM Sans", "Inter", system-ui, sans-serif',
 };
 // ─── Storage ──────────────────────────────────────────────────────────────────
 const SK = 'trades:v1', SS = 'settings:v1', SM = 'metadata:v1', SB = 'balance:v1', SI = 'lastimport:v1';
 const DEF = {
-    startingBalance: 10000, riskPerTrade: 10, feeRate: 0.04,
+    startingBalance: 10000, riskPerTrade: 10, feeRate: 0.04, swapRate: 0.033,
     propAccountSize: 5000, propProfitTargetPct: 10, propDailyLossPct: 3,
     propMaxDDPct: 6, propProfitSplitPct: 90,
 };
@@ -408,10 +409,8 @@ function balanceHistoryToTrades(txt) {
             const earliestEntry = Math.min(...consumed.map(c => c.ts));
             const long = p.direction === 'long';
             const gross = long ? (p.exitPrice - avgEntry) * totalQty : (avgEntry - p.exitPrice) * totalQty;
-            const tradeFee = (avgEntry + p.exitPrice) * totalQty * FEE; // 0.04% per leg
+            const tradeFee = (avgEntry + p.exitPrice) * totalQty * FEE;
             const swapDays = countSwapDays(earliestEntry, row.ts);
-            const swapFee = avgEntry * totalQty * 0.00033 * swapDays; // 0.033% per midnight
-            const totalFee = tradeFee + swapFee;
             const rMult = avgEntry > 0 ? (p.exitPrice - avgEntry) / avgEntry * (long ? 1 : -1) : 0;
             trades.push({
                 id: `bal-${p.symbol}-${earliestEntry}-${row.ts}-${trades.length}`,
@@ -420,8 +419,7 @@ function balanceHistoryToTrades(txt) {
                 exitPrice: p.exitPrice,
                 entryTime: earliestEntry, exitTime: row.ts,
                 pnl: gross, rMultiple: rMult, pnlPct: rMult * 100,
-                fromBalance: true, commission: totalFee,
-                tradeFee, swapFee, swapDays,
+                fromBalance: true, baseTradeFee: tradeFee, swapDays,
             });
         }
     }
@@ -473,17 +471,21 @@ const sessionOf = ts => { const h = new Date(ts).getUTCHours(); if (h < 7)
     return 'London'; if (h < 16)
     return 'Overlap'; if (h < 21)
     return 'NY'; return 'After'; };
-function addFees(t, r) {
-    // Trades from balance history already have commission (trade fee + swap fee) calculated
-    if (t.fromBalance && t.commission != null) {
-        const net = t.pnl - t.commission;
-        const fcp = t.entryPrice > 0 ? t.commission / (t.entryPrice * t.qty) * 100 : 0;
-        return { ...t, fees: t.commission, pnlNet: net, pnlPctNet: t.pnlPct - fcp, rMultipleNet: t.rMultiple - fcp / 100 };
+function addFees(t, feeRate, swapRate) {
+    const sr = (swapRate || 0.033) / 100; // convert % to decimal
+    const swapDays = t.swapDays || countSwapDays(t.entryTime, t.exitTime);
+    if (t.fromBalance) {
+        // balance-history: tradeFee already calc'd at import time; recalc swap with current rate
+        const tradeFee = t.baseTradeFee || (t.entryPrice + t.exitPrice) * t.qty * (feeRate / 100);
+        const swapFee = t.entryPrice * t.qty * sr * swapDays;
+        const fee = tradeFee + swapFee;
+        const net = t.pnl - fee;
+        const fcp = t.entryPrice > 0 ? fee / (t.entryPrice * t.qty) * 100 : 0;
+        return { ...t, fees: fee, tradeFee, swapFee, swapDays, pnlNet: net, pnlPctNet: t.pnlPct - fcp, rMultipleNet: t.rMultiple - fcp / 100 };
     }
-    // Order-history trades: calculate trade fee + swap fee
-    const tradeFee = (t.entryPrice + t.exitPrice) * t.qty * (r / 100);
-    const swapDays = countSwapDays(t.entryTime, t.exitTime);
-    const swapFee = t.entryPrice * t.qty * 0.00033 * swapDays;
+    // Order-history trades
+    const tradeFee = (t.entryPrice + t.exitPrice) * t.qty * (feeRate / 100);
+    const swapFee = t.entryPrice * t.qty * sr * swapDays;
     const fee = tradeFee + swapFee;
     const net = t.pnl - fee;
     const fcp = t.entryPrice > 0 ? fee / (t.entryPrice * t.qty) * 100 : 0;
@@ -710,7 +712,7 @@ function App() {
         }
         return result;
     }, [balanceDailyMap]);
-    const enriched = useMemo(() => trades.map(t => { const m = meta[t.id] || {}; return { ...addFees(t, sett.feeRate), note: m.note || '', setupTags: m.setupTags || [], execTags: m.execTags || [], rating: m.rating || 0 }; }), [trades, meta, sett.feeRate]);
+    const enriched = useMemo(() => trades.map(t => { const m = meta[t.id] || {}; return { ...addFees(t, sett.feeRate, sett.swapRate), note: m.note || '', setupTags: m.setupTags || [], execTags: m.execTags || [], rating: m.rating || 0 }; }), [trades, meta, sett.feeRate, sett.swapRate]);
     const filtered = useMemo(() => enriched.filter(t => (fSym === 'all' || t.symbol === fSym) && (fDir === 'all' || t.direction === fDir) && (fSetup === 'all' || t.setupTags.includes(fSetup))), [enriched, fSym, fDir, fSetup]);
     const symbols = useMemo(() => Array.from(new Set(trades.map(t => t.symbol))), [trades]);
     const stats = useMemo(() => {
@@ -916,10 +918,11 @@ function App() {
                         lastImport.newCount,
                         " new trades"))),
                 React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
-                    React.createElement("span", { style: { fontSize: 10, color: C.textFaint, letterSpacing: '0.08em', textTransform: 'uppercase' } }, "Fee/leg"),
-                    React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 3 } },
-                        React.createElement("input", { type: "number", step: "0.01", min: "0", value: sett.feeRate, onChange: e => saveS({ ...sett, feeRate: parseFloat(e.target.value) || 0 }), style: { width: 52, background: C.card, border: `1px solid ${C.border2}`, color: C.text, fontFamily: C.mono, fontSize: 11, padding: '4px 6px', borderRadius: 4, outline: 'none', textAlign: 'right' } }),
-                        React.createElement("span", { style: { fontSize: 10, color: C.textFaint } }, "%"))),
+                    React.createElement("span", { style: { fontSize: 10, color: C.textFaint } },
+                        trades.length,
+                        " trades \u00B7 ",
+                        sett.feeRate,
+                        "% fee")),
                 trades.length > 0 && (React.createElement("div", { style: { fontSize: 10, color: C.textFaint } },
                     trades.length,
                     " trades \u00B7 ",
@@ -1525,15 +1528,33 @@ function PropFirmTab({ ps, sett, setSett, trades }) {
 }
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function SettingsTab({ sett, setSett }) {
-    return (React.createElement("div", { style: { padding: '20px 24px', maxWidth: 640 } },
+    return (React.createElement("div", { style: { padding: '20px 24px', maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 14 } },
         React.createElement(Panel, { title: "Account Settings" },
-            React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 } }, [['Starting balance ($)', 'startingBalance', 1], ['Risk per trade ($)', 'riskPerTrade', 0.5], ['Fee per leg (%)', 'feeRate', 0.01]].map(([l, k, step]) => (React.createElement("label", { key: k, style: { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.textDim, fontWeight: 600 } },
+            React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } }, [['Starting balance ($)', 'startingBalance', 1], ['Risk per trade ($)', 'riskPerTrade', 0.5]].map(([l, k, step]) => (React.createElement("label", { key: k, style: { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.textDim, fontWeight: 600 } },
                 l,
-                React.createElement("input", { type: "number", step: step, value: sett[k], onChange: e => setSett({ ...sett, [k]: parseFloat(e.target.value) || 0 }), style: { background: C.main, border: `1px solid ${C.border2}`, color: C.text, padding: '9px 10px', fontFamily: C.mono, fontSize: 13, borderRadius: 4, outline: 'none' } }))))),
-            React.createElement("div", { style: { fontSize: 11, color: C.textDim, marginTop: 14, lineHeight: 1.6 } },
-                "Fee per leg charged on both entry and exit notional. Round-trip = ",
-                ((sett.feeRate || 0) * 2).toFixed(2),
-                "%."))));
+                React.createElement("input", { type: "number", step: step, value: sett[k], onChange: e => setSett({ ...sett, [k]: parseFloat(e.target.value) || 0 }), style: { background: C.main, border: `1px solid ${C.border2}`, color: C.text, padding: '9px 10px', fontFamily: C.mono, fontSize: 13, borderRadius: 4, outline: 'none' } })))))),
+        React.createElement(Panel, { title: "Fee Settings", sub: "Applied to all trade calculations" },
+            React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 } },
+                React.createElement("label", { style: { display: 'flex', flexDirection: 'column', gap: 5 } },
+                    React.createElement("span", { style: { fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.textDim, fontWeight: 600 } }, "Trading fee per leg (%)"),
+                    React.createElement("input", { type: "number", step: "0.01", min: "0", value: sett.feeRate, onChange: e => setSett({ ...sett, feeRate: parseFloat(e.target.value) || 0 }), style: { background: C.main, border: `1px solid ${C.border2}`, color: C.text, padding: '9px 10px', fontFamily: C.mono, fontSize: 13, borderRadius: 4, outline: 'none' } }),
+                    React.createElement("span", { style: { fontSize: 10, color: C.textDim } },
+                        "Charged on entry and exit. Round-trip = ",
+                        ((sett.feeRate || 0) * 2).toFixed(3),
+                        "%")),
+                React.createElement("label", { style: { display: 'flex', flexDirection: 'column', gap: 5 } },
+                    React.createElement("span", { style: { fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#a07af0', fontWeight: 600 } }, "Overnight swap fee per day (%)"),
+                    React.createElement("input", { type: "number", step: "0.001", min: "0", value: sett.swapRate || 0.033, onChange: e => setSett({ ...sett, swapRate: parseFloat(e.target.value) || 0 }), style: { background: C.main, border: `1px solid rgba(160,122,240,0.35)`, color: C.text, padding: '9px 10px', fontFamily: C.mono, fontSize: 13, borderRadius: 4, outline: 'none' } }),
+                    React.createElement("span", { style: { fontSize: 10, color: C.textDim } }, "Deducted at 00:25 UTC for positions open at midnight. Applied per midnight crossed."))),
+            React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
+                ['Trade open same day (no midnight crossed)', '0 swap days', 'no swap fee', true],
+                ['Open Mon 22:00, close Tue 10:00 (1 midnight)', '1 swap day', `${(sett.swapRate || 0.033).toFixed(3)}% of entry notional`, true],
+                ['Open Mon 22:00, close Wed 14:00 (2 midnights)', '2 swap days', `${((sett.swapRate || 0.033) * 2).toFixed(3)}% of entry notional`, true],
+            ].map(([scenario, days, fee]) => (React.createElement("div", { key: scenario, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 5, border: `1px solid ${C.border}` } },
+                React.createElement("span", { style: { fontSize: 11, color: C.textDim } }, scenario),
+                React.createElement("div", { style: { textAlign: 'right' } },
+                    React.createElement("span", { style: { fontFamily: C.mono, fontSize: 11, color: '#a07af0', marginRight: 12 } }, days),
+                    React.createElement("span", { style: { fontFamily: C.mono, fontSize: 11, color: C.textDim } }, fee)))))))));
 }
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
 function EditModal({ trade, meta, onSave, onClose }) {
