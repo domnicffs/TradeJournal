@@ -130,6 +130,8 @@ const IconReport = p => React.createElement(Svg, { ...p },
 const IconBook = p => React.createElement(Svg, { ...p },
     React.createElement("path", { d: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20" }),
     React.createElement("path", { d: "M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" }));
+const IconUp = p => React.createElement(Svg, { size: 10, ...p },
+    React.createElement("polyline", { points: "18 15 12 9 6 15" }));
 const IconDn = p => React.createElement(Svg, { size: 10, ...p },
     React.createElement("polyline", { points: "6 9 12 15 18 9" }));
 const IconX = p => React.createElement(Svg, { ...p },
@@ -478,25 +480,28 @@ const sessionOf = ts => { const h = new Date(ts).getUTCHours(); if (h < 7)
     return 'London'; if (h < 16)
     return 'Overlap'; if (h < 21)
     return 'NY'; return 'After'; };
-function addFees(t, feeRate, swapRate) {
-    const sr = (swapRate || 0.033) / 100; // convert % to decimal
+function addFees(t, feeRate, swapRate, riskPerTrade) {
+    const sr = (swapRate || 0.033) / 100;
     const swapDays = t.swapDays || countSwapDays(t.entryTime, t.exitTime);
+    let fee, tradeFee, swapFee, net, fcp;
     if (t.fromBalance) {
-        // balance-history: tradeFee already calc'd at import time; recalc swap with current rate
-        const tradeFee = t.baseTradeFee || (t.entryPrice + t.exitPrice) * t.qty * (feeRate / 100);
-        const swapFee = t.entryPrice * t.qty * sr * swapDays;
-        const fee = tradeFee + swapFee;
-        const net = t.pnl - fee;
-        const fcp = t.entryPrice > 0 ? fee / (t.entryPrice * t.qty) * 100 : 0;
-        return { ...t, fees: fee, tradeFee, swapFee, swapDays, pnlNet: net, pnlPctNet: t.pnlPct - fcp, rMultipleNet: t.rMultiple - fcp / 100 };
+        tradeFee = t.baseTradeFee || (t.entryPrice + t.exitPrice) * t.qty * (feeRate / 100);
+        swapFee = t.entryPrice * t.qty * sr * swapDays;
+        fee = tradeFee + swapFee;
+        net = t.pnl - fee;
+        fcp = t.entryPrice > 0 ? fee / (t.entryPrice * t.qty) * 100 : 0;
     }
-    // Order-history trades
-    const tradeFee = (t.entryPrice + t.exitPrice) * t.qty * (feeRate / 100);
-    const swapFee = t.entryPrice * t.qty * sr * swapDays;
-    const fee = tradeFee + swapFee;
-    const net = t.pnl - fee;
-    const fcp = t.entryPrice > 0 ? fee / (t.entryPrice * t.qty) * 100 : 0;
-    return { ...t, fees: fee, tradeFee, swapFee, swapDays, pnlNet: net, pnlPctNet: t.pnlPct - fcp, rMultipleNet: t.rMultiple - fcp / 100 };
+    else {
+        tradeFee = (t.entryPrice + t.exitPrice) * t.qty * (feeRate / 100);
+        swapFee = t.entryPrice * t.qty * sr * swapDays;
+        fee = tradeFee + swapFee;
+        net = t.pnl - fee;
+        fcp = t.entryPrice > 0 ? fee / (t.entryPrice * t.qty) * 100 : 0;
+    }
+    // RR = gross P&L / risk per trade (before fees, as per user definition)
+    const risk = riskPerTrade || 10;
+    const rr = parseFloat((t.pnl / risk).toFixed(2));
+    return { ...t, fees: fee, tradeFee, swapFee, swapDays, pnlNet: net, pnlPctNet: t.pnlPct - fcp, rMultipleNet: rr, rMultiple: rr };
 }
 // ─── Main App ─────────────────────────────────────────────────────────────────
 function App() {
@@ -720,7 +725,7 @@ function App() {
         }
         return result;
     }, [balanceDailyMap]);
-    const enriched = useMemo(() => trades.map(t => { const m = meta[t.id] || {}; return { ...addFees(t, sett.feeRate, sett.swapRate), note: m.note || '', setupTags: m.setupTags || [], execTags: m.execTags || [], rating: m.rating || 0 }; }), [trades, meta, sett.feeRate, sett.swapRate]);
+    const enriched = useMemo(() => trades.map(t => { const m = meta[t.id] || {}; return { ...addFees(t, sett.feeRate, sett.swapRate, sett.riskPerTrade), note: m.note || '', setupTags: m.setupTags || [], execTags: m.execTags || [], rating: m.rating || 0 }; }), [trades, meta, sett.feeRate, sett.swapRate, sett.riskPerTrade]);
     const filtered = useMemo(() => enriched.filter(t => (fSym === 'all' || t.symbol === fSym) && (fDir === 'all' || t.direction === fDir) && (fSetup === 'all' || t.setupTags.includes(fSetup))), [enriched, fSym, fDir, fSetup]);
     const symbols = useMemo(() => Array.from(new Set(trades.map(t => t.symbol))), [trades]);
     const stats = useMemo(() => {
@@ -918,24 +923,13 @@ function App() {
                 n.label,
                 tab === n.id && React.createElement("div", { style: { marginLeft: 'auto', width: 3, height: 16, borderRadius: 2, background: C.blue } }))))),
             React.createElement("div", { style: { flex: 1 } }),
-            React.createElement("div", { style: { padding: 16, borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 10 } },
-                lastImport && (React.createElement("div", { style: { fontSize: 10, color: C.textFaint, lineHeight: 1.5 } },
-                    React.createElement("div", null, "Last import"),
-                    React.createElement("div", { style: { color: C.textDim } }, new Date(lastImport.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })),
-                    lastImport.newCount > 0 && React.createElement("div", { style: { color: C.green } },
-                        "+",
-                        lastImport.newCount,
-                        " new trades"))),
-                React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
-                    React.createElement("span", { style: { fontSize: 10, color: C.textFaint } },
-                        trades.length,
-                        " trades \u00B7 ",
-                        sett.feeRate,
-                        "% fee")),
-                trades.length > 0 && (React.createElement("div", { style: { fontSize: 10, color: C.textFaint } },
-                    trades.length,
-                    " trades \u00B7 ",
-                    symbols.join(', '))))),
+            lastImport && (React.createElement("div", { style: { padding: '12px 16px', borderTop: `1px solid ${C.border}`, fontSize: 10, color: C.textFaint, lineHeight: 1.6 } },
+                React.createElement("div", { style: { color: C.textDim, fontWeight: 600, marginBottom: 2 } }, "Last import"),
+                React.createElement("div", null, new Date(lastImport.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })),
+                lastImport.newCount > 0 && React.createElement("div", { style: { color: C.green } },
+                    "+",
+                    lastImport.newCount,
+                    " new trades")))),
         React.createElement("div", { style: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: C.main } },
             React.createElement("div", { style: { height: 54, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', padding: '0 24px', gap: 12, flexShrink: 0 } },
                 React.createElement("div", { style: { fontWeight: 700, fontSize: 17, color: C.text, flex: 1, letterSpacing: '-0.01em' } }, ((_a = NAV.find(n => n.id === tab)) === null || _a === void 0 ? void 0 : _a.label) || 'Dashboard'),
@@ -1085,6 +1079,7 @@ function TopCard({ label, value, sub, accent, badge, gauge, gaugeVal, trioBadge,
 }
 // ─── Dashboard Calendar — full featured ──────────────────────────────────────
 function DashCalendar({ dailyPnl, dailyCount, trades }) {
+    var _a, _b;
     const allDays = Object.keys(dailyPnl).sort();
     const [viewDate, setViewDate] = useState(() => {
         if (allDays.length) {
@@ -1194,77 +1189,78 @@ function DashCalendar({ dailyPnl, dailyCount, trades }) {
                         fnum(week.wr, 0),
                         "%")),
                 React.createElement("div", { style: { fontSize: 9, color: C.textFaint, marginTop: 3 } }, "click for details")) : React.createElement("div", { style: { fontSize: 10, color: C.textFaint, textAlign: 'center' } }, "\u2014")))))),
-        activeWeek && (React.createElement("div", { style: { position: 'fixed', bottom: 0, left: 220, right: 0, background: C.bg, borderTop: `2px solid ${C.border2}`, zIndex: 500, maxHeight: '45vh', display: 'flex', flexDirection: 'column', boxShadow: '0 -8px 32px rgba(0,0,0,0.5)' } },
-            React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 } },
-                React.createElement("div", { style: { display: 'flex', gap: 24, alignItems: 'center' } },
-                    React.createElement("span", { style: { fontSize: 13, fontWeight: 700, color: C.text } },
-                        activeWeek.days.filter(Boolean)[0],
-                        " \u2013 ",
-                        activeWeek.days.filter(Boolean).slice(-1)[0]),
-                    [
-                        ['Net P&L', f$(activeWeek.pnl), activeWeek.pnl >= 0 ? C.green : C.red],
-                        ['Trades', String(activeWeek.trades.length), C.text],
-                        ['Win Days', String(activeWeek.wins), C.green],
-                        ['Loss Days', String(activeWeek.losses), C.red],
-                        ['Win Rate', fnum(activeWeek.wr, 0) + '%', activeWeek.wr >= 50 ? C.green : C.red],
-                        ['Total Fees', '−' + f$(activeWeek.fees), C.yellow],
-                        ['Best Day', activeWeek.bestDay ? f$(dailyPnl[activeWeek.bestDay] || 0, 0) : '—', C.green],
-                        ['Worst Day', activeWeek.worstDay ? f$(dailyPnl[activeWeek.worstDay] || 0, 0) : '—', C.red],
-                    ].map(([l, v, col]) => (React.createElement("div", { key: l },
-                        React.createElement("div", { style: { fontSize: 9, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 } }, l),
-                        React.createElement("div", { style: { fontFamily: C.mono, fontSize: 13, fontWeight: 700, color: col } }, v))))),
-                React.createElement("button", { onClick: () => setSelectedWeek(null), style: { background: 'none', border: `1px solid ${C.border2}`, color: C.textDim, cursor: 'pointer', padding: '4px 10px', fontSize: 12, borderRadius: 4, fontFamily: C.sans } }, "\u2715 Close")),
-            React.createElement("div", { style: { overflowY: 'auto', flex: 1 } },
+        activeWeek && (React.createElement("div", { style: { borderTop: `2px solid ${C.border2}`, background: C.main, borderRadius: '0 0 8px 8px' } },
+            React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 0, padding: '0 4px', borderBottom: `1px solid ${C.border}`, overflowX: 'auto' } },
+                React.createElement("div", { style: { padding: '12px 16px', flexShrink: 0 } },
+                    React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: C.text } }, (_a = activeWeek.days.filter(Boolean)[0]) === null || _a === void 0 ? void 0 :
+                        _a.slice(5),
+                        " \u2013 ", (_b = activeWeek.days.filter(Boolean).slice(-1)[0]) === null || _b === void 0 ? void 0 :
+                        _b.slice(5))),
+                [
+                    ['Net P&L', f$(activeWeek.pnl), activeWeek.pnl >= 0 ? C.green : C.red],
+                    ['Trades', String(activeWeek.trades.length), C.text],
+                    ['Win Days', String(activeWeek.wins), C.green],
+                    ['Loss Days', String(activeWeek.losses), C.red],
+                    ['Win Rate', fnum(activeWeek.wr, 0) + '%', activeWeek.wr >= 50 ? C.green : C.red],
+                    ['Fees', '−' + f$(activeWeek.fees), C.yellow],
+                    ['Best Day', activeWeek.bestDay ? f$(dailyPnl[activeWeek.bestDay] || 0, 0) : '—', C.green],
+                    ['Worst Day', activeWeek.worstDay ? f$(dailyPnl[activeWeek.worstDay] || 0, 0) : '—', C.red],
+                ].map(([l, v, col]) => (React.createElement("div", { key: l, style: { padding: '10px 16px', borderLeft: `1px solid ${C.border}`, flexShrink: 0 } },
+                    React.createElement("div", { style: { fontSize: 9, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 } }, l),
+                    React.createElement("div", { style: { fontFamily: C.mono, fontSize: 13, fontWeight: 700, color: col } }, v)))),
+                React.createElement("div", { style: { marginLeft: 'auto', padding: '10px 14px', flexShrink: 0 } },
+                    React.createElement("button", { onClick: () => setSelectedWeek(null), style: { background: 'none', border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', padding: '4px 10px', fontSize: 11, borderRadius: 4, fontFamily: C.sans } }, "\u2715"))),
+            React.createElement("div", { style: { overflowY: 'auto', maxHeight: 260 } },
                 React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse', fontSize: 12 } },
-                    React.createElement("thead", { style: { position: 'sticky', top: 0, background: C.bg } },
-                        React.createElement("tr", null, ['Opened', 'Closed', 'Symbol', 'Side', 'Entry', 'Exit', 'Gross', 'Fee', 'Swap', 'Net P&L'].map(h => (React.createElement("th", { key: h, style: { padding: '8px 12px', borderBottom: `1px solid ${C.border}`, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 600, textAlign: ['Gross', 'Fee', 'Swap', 'Net P&L'].includes(h) ? 'right' : 'left' } }, h))))),
+                    React.createElement("thead", { style: { position: 'sticky', top: 0, background: C.main } },
+                        React.createElement("tr", null, ['Sym', 'Side', 'Opened', 'Closed', 'Entry', 'Exit', 'Gross', 'Fee', 'Swap', 'Net P&L'].map(h => (React.createElement("th", { key: h, style: { padding: '7px 10px', borderBottom: `1px solid ${C.border}`, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 600, textAlign: ['Gross', 'Fee', 'Swap', 'Net P&L'].includes(h) ? 'right' : 'left', whiteSpace: 'nowrap' } }, h))))),
                     React.createElement("tbody", null, activeWeek.trades.sort((a, b) => a.exitTime - b.exitTime).map(t => (React.createElement("tr", { key: t.id, style: { borderBottom: `1px solid ${C.border}` }, onMouseEnter: e => e.currentTarget.style.background = C.cardHov, onMouseLeave: e => e.currentTarget.style.background = 'transparent' },
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 10, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.entryTime)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 10, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.exitTime)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontWeight: 600, color: C.text } }, t.symbol.replace('BYBIT:', '')),
-                        React.createElement("td", { style: { padding: '8px 12px' } },
-                            React.createElement("span", { style: { fontSize: 9, padding: '2px 6px', borderRadius: 3, background: t.direction === 'long' ? C.greenBg : C.redBg, color: t.direction === 'long' ? C.green : C.red, fontWeight: 700, textTransform: 'uppercase' } }, t.direction)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 10 } }, f$(t.entryPrice, 2)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 10 } }, f$(t.exitPrice, 2)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: t.pnl >= 0 ? C.green : C.red } }, f$(t.pnl)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 10, textAlign: 'right', color: C.yellow } },
+                        React.createElement("td", { style: { padding: '7px 10px', fontWeight: 600, color: C.text } }, t.symbol.replace('BYBIT:', '')),
+                        React.createElement("td", { style: { padding: '7px 10px' } },
+                            React.createElement("span", { style: { fontSize: 9, padding: '2px 5px', borderRadius: 3, background: t.direction === 'long' ? C.greenBg : C.redBg, color: t.direction === 'long' ? C.green : C.red, fontWeight: 700, textTransform: 'uppercase' } }, t.direction[0].toUpperCase())),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 10, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.entryTime)),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 10, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.exitTime)),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 10 } }, f$(t.entryPrice, 2)),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 10 } }, f$(t.exitPrice, 2)),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: t.pnl >= 0 ? C.green : C.red } }, f$(t.pnl)),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 10, textAlign: 'right', color: C.yellow } },
                             "\u2212",
                             f$(t.tradeFee || t.fees)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 10, textAlign: 'right', color: '#a07af0' } }, (t.swapDays || 0) > 0 ? `−${f$(t.swapFee || 0)}` : '—'),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 12, textAlign: 'right', fontWeight: 700, color: t.pnlNet >= 0 ? C.green : C.red } }, f$(t.pnlNet)))))))))),
-        selectedDay && (React.createElement("div", { style: { position: 'fixed', bottom: 0, left: 220, right: 0, background: C.bg, borderTop: `2px solid ${C.border2}`, zIndex: 500, maxHeight: '45vh', display: 'flex', flexDirection: 'column', boxShadow: '0 -8px 32px rgba(0,0,0,0.5)' } },
-            React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 } },
-                React.createElement("div", { style: { display: 'flex', gap: 20, alignItems: 'center' } },
-                    React.createElement("span", { style: { fontSize: 13, fontWeight: 700, color: C.text } }, selectedDay),
-                    [
-                        ['Trades', String(dayTrades.length), C.text],
-                        ['Net P&L', f$(dailyPnl[selectedDay] || 0), dailyPnl[selectedDay] >= 0 ? C.green : C.red],
-                        ['Win Rate', dayTrades.length > 0 ? fnum(dayTrades.filter(t => t.pnlNet > 0).length / dayTrades.length * 100, 0) + '%' : '—',
-                            dayTrades.length > 0 && dayTrades.filter(t => t.pnlNet > 0).length / dayTrades.length >= 0.5 ? C.green : C.red],
-                        ['Total Fees', '−' + f$(dayTrades.reduce((s, t) => s + (t.fees || 0), 0)), C.yellow],
-                        ['Best Trade', dayTrades.length ? f$(Math.max(...dayTrades.map(t => t.pnlNet))) : '—', C.green],
-                        ['Worst Trade', dayTrades.length ? f$(Math.min(...dayTrades.map(t => t.pnlNet))) : '—', C.red],
-                    ].map(([l, v, col]) => (React.createElement("div", { key: l },
-                        React.createElement("div", { style: { fontSize: 9, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 } }, l),
-                        React.createElement("div", { style: { fontFamily: C.mono, fontSize: 13, fontWeight: 700, color: col } }, v))))),
-                React.createElement("button", { onClick: () => setSelectedDay(null), style: { background: 'none', border: `1px solid ${C.border2}`, color: C.textDim, cursor: 'pointer', padding: '4px 10px', fontSize: 12, borderRadius: 4, fontFamily: C.sans } }, "\u2715 Close")),
-            React.createElement("div", { style: { overflowY: 'auto', flex: 1 } },
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 10, textAlign: 'right', color: '#a07af0' } }, (t.swapDays || 0) > 0 ? `−${f$(t.swapFee || 0)}` : '—'),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 12, textAlign: 'right', fontWeight: 700, color: t.pnlNet >= 0 ? C.green : C.red } }, f$(t.pnlNet)))))))))),
+        selectedDay && (React.createElement("div", { style: { borderTop: `2px solid ${C.border2}`, background: C.main, borderRadius: '0 0 8px 8px' } },
+            React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 0, padding: '0 4px', borderBottom: `1px solid ${C.border}`, overflowX: 'auto' } },
+                React.createElement("div", { style: { padding: '12px 16px', flexShrink: 0 } },
+                    React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: C.text } }, new Date(selectedDay + 'T00:00:00Z').toLocaleString('en-GB', { weekday: 'long', day: '2-digit', month: 'short' }))),
+                [
+                    ['Trades', String(dayTrades.length), C.text],
+                    ['Net P&L', f$(dailyPnl[selectedDay] || 0), dailyPnl[selectedDay] >= 0 ? C.green : C.red],
+                    ['Win Rate', dayTrades.length > 0 ? fnum(dayTrades.filter(t => t.pnlNet > 0).length / dayTrades.length * 100, 0) + '%' : '—', dayTrades.length > 0 && dayTrades.filter(t => t.pnlNet > 0).length / dayTrades.length >= 0.5 ? C.green : C.red],
+                    ['Fees', '−' + f$(dayTrades.reduce((s, t) => s + (t.fees || 0), 0)), C.yellow],
+                    ['Best', dayTrades.length ? f$(Math.max(...dayTrades.map(t => t.pnlNet))) : '—', C.green],
+                    ['Worst', dayTrades.length ? f$(Math.min(...dayTrades.map(t => t.pnlNet))) : '—', C.red],
+                ].map(([l, v, col]) => (React.createElement("div", { key: l, style: { padding: '10px 16px', borderLeft: `1px solid ${C.border}`, flexShrink: 0 } },
+                    React.createElement("div", { style: { fontSize: 9, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 } }, l),
+                    React.createElement("div", { style: { fontFamily: C.mono, fontSize: 13, fontWeight: 700, color: col } }, v)))),
+                React.createElement("div", { style: { marginLeft: 'auto', padding: '10px 14px', flexShrink: 0 } },
+                    React.createElement("button", { onClick: () => setSelectedDay(null), style: { background: 'none', border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', padding: '4px 10px', fontSize: 11, borderRadius: 4, fontFamily: C.sans } }, "\u2715"))),
+            React.createElement("div", { style: { overflowY: 'auto', maxHeight: 260 } },
                 React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse', fontSize: 12 } },
-                    React.createElement("thead", { style: { position: 'sticky', top: 0, background: C.bg } },
-                        React.createElement("tr", null, ['Symbol', 'Side', 'Opened', 'Entry', 'Exit', 'Gross', 'Fee', 'Swap', 'Net P&L'].map(h => (React.createElement("th", { key: h, style: { padding: '8px 12px', borderBottom: `1px solid ${C.border}`, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 600, textAlign: ['Gross', 'Fee', 'Swap', 'Net P&L'].includes(h) ? 'right' : 'left' } }, h))))),
+                    React.createElement("thead", { style: { position: 'sticky', top: 0, background: C.main } },
+                        React.createElement("tr", null, ['Symbol', 'Side', 'Opened', 'Entry', 'Exit', 'Gross', 'Fee', 'Swap', 'Net P&L'].map(h => (React.createElement("th", { key: h, style: { padding: '7px 10px', borderBottom: `1px solid ${C.border}`, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 600, textAlign: ['Gross', 'Fee', 'Swap', 'Net P&L'].includes(h) ? 'right' : 'left', whiteSpace: 'nowrap' } }, h))))),
                     React.createElement("tbody", null, dayTrades.map(t => (React.createElement("tr", { key: t.id, style: { borderBottom: `1px solid ${C.border}` }, onMouseEnter: e => e.currentTarget.style.background = C.cardHov, onMouseLeave: e => e.currentTarget.style.background = 'transparent' },
-                        React.createElement("td", { style: { padding: '8px 12px', fontWeight: 600, color: C.text } }, t.symbol.replace('BYBIT:', '')),
-                        React.createElement("td", { style: { padding: '8px 12px' } },
-                            React.createElement("span", { style: { fontSize: 9, padding: '2px 6px', borderRadius: 3, background: t.direction === 'long' ? C.greenBg : C.redBg, color: t.direction === 'long' ? C.green : C.red, fontWeight: 700, textTransform: 'uppercase' } }, t.direction)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 10, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.entryTime)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 10 } }, f$(t.entryPrice, 2)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 10 } }, f$(t.exitPrice, 2)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: t.pnl >= 0 ? C.green : C.red } }, f$(t.pnl)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 10, textAlign: 'right', color: C.yellow } },
+                        React.createElement("td", { style: { padding: '7px 10px', fontWeight: 600, color: C.text } }, t.symbol.replace('BYBIT:', '')),
+                        React.createElement("td", { style: { padding: '7px 10px' } },
+                            React.createElement("span", { style: { fontSize: 9, padding: '2px 5px', borderRadius: 3, background: t.direction === 'long' ? C.greenBg : C.redBg, color: t.direction === 'long' ? C.green : C.red, fontWeight: 700, textTransform: 'uppercase' } }, t.direction)),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 10, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.entryTime)),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 10 } }, f$(t.entryPrice, 2)),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 10 } }, f$(t.exitPrice, 2)),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: t.pnl >= 0 ? C.green : C.red } }, f$(t.pnl)),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 10, textAlign: 'right', color: C.yellow } },
                             "\u2212",
                             f$(t.tradeFee || t.fees)),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 10, textAlign: 'right', color: '#a07af0' } }, (t.swapDays || 0) > 0 ? `−${f$(t.swapFee || 0)}` : '—'),
-                        React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 12, textAlign: 'right', fontWeight: 700, color: t.pnlNet >= 0 ? C.green : C.red } }, f$(t.pnlNet))))))))))));
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 10, textAlign: 'right', color: '#a07af0' } }, (t.swapDays || 0) > 0 ? `−${f$(t.swapFee || 0)}` : '—'),
+                        React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 12, textAlign: 'right', fontWeight: 700, color: t.pnlNet >= 0 ? C.green : C.red } }, f$(t.pnlNet))))))))))));
 }
 // ─── Analytics Tab ────────────────────────────────────────────────────────────
 function Analytics({ stats, sessionStats, hourStats, setupStats, execStats, weeklyStats, trades }) {
@@ -1496,26 +1492,25 @@ function PlaybookTab({ trades, meta, upMeta }) {
                         selected.swapDays,
                         " swap day",
                         selected.swapDays !== 1 ? 's' : ''))),
-            React.createElement("div", { style: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, overflow: 'hidden' } },
-                React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' } },
-                    React.createElement("div", { style: { padding: '11px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 } },
+            React.createElement("div", { style: { flex: 1, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' } },
+                React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: '0 0 auto', height: 320 } },
+                    React.createElement("div", { style: { padding: '10px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 } },
                         React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: '0.05em' } }, "Chart Screenshot"),
                         React.createElement("div", { style: { display: 'flex', gap: 8 } },
                             imgSrc && React.createElement("button", { onClick: () => setImgSrc(null), style: { background: 'none', border: `1px solid ${C.border2}`, color: C.red, cursor: 'pointer', padding: '3px 8px', fontSize: 10, borderRadius: 4, fontFamily: C.sans } }, "Remove"),
                             React.createElement("button", { onClick: () => { var _a; return (_a = imgRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, style: { background: 'rgba(74,127,212,0.15)', border: `1px solid rgba(74,127,212,0.4)`, color: C.blue, cursor: 'pointer', padding: '4px 10px', fontSize: 10, fontWeight: 600, borderRadius: 4, fontFamily: C.sans } }, "Upload"),
                             React.createElement("input", { ref: imgRef, type: "file", accept: "image/*", onChange: handleImg, style: { display: 'none' } }))),
-                    React.createElement("div", { style: { flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }, onDragOver: e => e.preventDefault(), onDrop: handleImgDrop }, imgSrc ? (React.createElement("img", { src: imgSrc, alt: "Trade chart", style: { width: '100%', height: '100%', objectFit: 'contain' } })) : (React.createElement("div", { style: { textAlign: 'center', padding: 32 } },
-                        React.createElement("div", { style: { fontSize: 32, marginBottom: 12, opacity: 0.3 } }, "\uD83D\uDCC8"),
-                        React.createElement("div", { style: { fontSize: 12, color: C.textDim, marginBottom: 6 } }, "Drop a screenshot here"),
-                        React.createElement("div", { style: { fontSize: 10, color: C.textFaint } }, "or click Upload above"))))),
-                React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, display: 'flex', flexDirection: 'column', overflow: 'hidden' } },
-                    React.createElement("div", { style: { padding: '11px 14px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 } },
-                        React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: '0.05em' } }, "Trade Notes")),
-                    React.createElement("div", { style: { flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' } },
-                        React.createElement("textarea", { value: note, onChange: e => setNote(e.target.value), placeholder: 'What did you see on the chart?\nWhy did you enter?\nWas it an A+ setup or B setup?\nWhat would you do differently?', style: { flex: 1, background: C.main, border: `1px solid ${C.border2}`, color: C.text, padding: '12px 14px', fontSize: 12, fontFamily: C.sans, borderRadius: 6, outline: 'none', resize: 'none', lineHeight: 1.7 } }),
-                        React.createElement("div", { style: { display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 } },
-                            React.createElement("button", { onClick: () => setSelected(null), style: { padding: '8px 16px', background: 'transparent', border: `1px solid ${C.border2}`, color: C.textDim, fontSize: 12, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Cancel"),
-                            React.createElement("button", { onClick: save, style: { padding: '8px 20px', background: C.blue, border: 'none', color: 'white', fontSize: 12, fontWeight: 700, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Save"))))))) : (React.createElement("div", { style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8 } },
+                    React.createElement("div", { style: { flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.main }, onDragOver: e => e.preventDefault(), onDrop: handleImgDrop }, imgSrc ? (React.createElement("img", { src: imgSrc, alt: "Trade chart", style: { width: '100%', height: '100%', objectFit: 'contain' } })) : (React.createElement("div", { style: { textAlign: 'center', padding: 32 } },
+                        React.createElement("div", { style: { fontSize: 40, marginBottom: 12, opacity: 0.2 } }, "\uD83D\uDCC8"),
+                        React.createElement("div", { style: { fontSize: 13, color: C.textDim, marginBottom: 6 } }, "Drop a screenshot here or click Upload"),
+                        React.createElement("div", { style: { fontSize: 10, color: C.textFaint } }, "Landscape screenshots work best"))))),
+                React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' } },
+                    React.createElement("div", { style: { padding: '10px 14px', borderBottom: `1px solid ${C.border}`, flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                        React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: '0.05em' } }, "Trade Notes"),
+                        React.createElement("div", { style: { display: 'flex', gap: 8 } },
+                            React.createElement("button", { onClick: () => setSelected(null), style: { padding: '6px 14px', background: 'transparent', border: `1px solid ${C.border2}`, color: C.textDim, fontSize: 11, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Cancel"),
+                            React.createElement("button", { onClick: save, style: { padding: '6px 16px', background: C.blue, border: 'none', color: 'white', fontSize: 11, fontWeight: 700, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Save"))),
+                    React.createElement("textarea", { value: note, onChange: e => setNote(e.target.value), placeholder: 'What did you see on the chart?\nWhy did you enter?\nWas it an A+ setup or B setup?\nWhat would you do differently?', style: { flex: 1, background: 'transparent', border: 'none', color: C.text, padding: '14px 16px', fontSize: 12, fontFamily: C.sans, outline: 'none', resize: 'none', lineHeight: 1.8 } }))))) : (React.createElement("div", { style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8 } },
             React.createElement("div", { style: { textAlign: 'center', padding: 48 } },
                 React.createElement("div", { style: { fontSize: 40, marginBottom: 16, opacity: 0.2 } }, "\uD83D\uDCCB"),
                 React.createElement("div", { style: { fontSize: 14, fontWeight: 600, color: C.textDim, marginBottom: 8 } }, "Select a trade to review"),
@@ -1527,8 +1522,19 @@ function TradesTab({ trades, sk, sd, doSort, onEdit }) {
         React.createElement("span", { style: { display: 'inline-flex', alignItems: 'center', gap: 3 } },
             children,
             sk === k && (sd === 'asc' ? React.createElement(IconUp, null) : React.createElement(IconDn, null)))));
+    // Group trades by exit day for dividers
+    const rows = [];
+    let lastDay = '';
+    for (const t of trades) {
+        const day = isoDay(t.exitTime);
+        if (day !== lastDay) {
+            rows.push({ type: 'divider', day, key: 'div-' + day });
+            lastDay = day;
+        }
+        rows.push({ type: 'trade', trade: t, key: t.id });
+    }
     return (React.createElement("div", { style: { padding: '20px 24px' } },
-        React.createElement("p", { style: { fontSize: 11, color: C.textDim, marginBottom: 10 } }, "Click any row to add notes, setup tags, and rating."),
+        React.createElement("p", { style: { fontSize: 11, color: C.textDim, marginBottom: 10 } }, "Click any row to add notes, setup tags, and rating. RR = Gross P&L \u00F7 Risk per trade."),
         React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' } },
             React.createElement("div", { style: { overflowX: 'auto' } },
                 React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse', fontSize: 12 } },
@@ -1547,27 +1553,41 @@ function TradesTab({ trades, sk, sd, doSort, onEdit }) {
                             React.createElement(SH, { k: "pnl", align: "right" }, "Gross"),
                             React.createElement(SH, { k: "tradeFee", align: "right" }, "Fee"),
                             React.createElement(SH, { k: "swapDays", align: "right" }, "Swap"),
+                            React.createElement(SH, { k: "rMultipleNet", align: "right" }, "RR"),
                             React.createElement(SH, { k: "pnlNet", align: "right" }, "Net"))),
-                    React.createElement("tbody", null, trades.map(t => (React.createElement("tr", { key: t.id, onClick: () => onEdit(t), style: { borderBottom: `1px solid ${C.border}`, cursor: 'pointer' }, onMouseEnter: e => e.currentTarget.style.background = C.cardHov, onMouseLeave: e => e.currentTarget.style.background = 'transparent' },
-                        React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.entryTime)),
-                        React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.exitTime)),
-                        React.createElement("td", { style: { padding: '9px 12px', fontWeight: 600, color: C.text } }, t.symbol.replace('BYBIT:', '')),
-                        React.createElement("td", { style: { padding: '9px 12px' } },
-                            React.createElement("span", { style: { fontSize: 9, padding: '3px 7px', borderRadius: 3, background: t.direction === 'long' ? C.greenBg : C.redBg, color: t.direction === 'long' ? C.green : C.red, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' } }, t.direction)),
-                        React.createElement("td", { style: { padding: '9px 12px' } }, (t.setupTags || []).length ? React.createElement("div", { style: { display: 'flex', gap: 3, flexWrap: 'wrap' } }, (t.setupTags || []).map(s => React.createElement("span", { key: s, style: { fontSize: 9, padding: '2px 6px', background: 'rgba(74,127,212,0.1)', border: '1px solid rgba(74,127,212,0.3)', color: C.blue, borderRadius: 3, fontWeight: 600 } }, s))) : React.createElement("span", { style: { color: C.textFaint, fontSize: 10 } }, "\u2014")),
-                        React.createElement("td", { style: { padding: '9px 12px' } }, t.rating > 0 ? React.createElement("span", { style: { color: C.yellow, letterSpacing: 1 } },
-                            '★'.repeat(t.rating),
-                            '☆'.repeat(5 - t.rating)) : React.createElement("span", { style: { color: C.textFaint, fontSize: 10 } }, "\u2014")),
-                        React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right' } }, t.qty),
-                        React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right' } }, f$(t.entryPrice, 2)),
-                        React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right' } }, f$(t.exitPrice, 2)),
-                        React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: t.pnlNet >= 0 ? C.green : C.red } }, fpct(t.pnlPctNet)),
-                        React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: t.pnl >= 0 ? '#4a7a5a' : '#7a4a4a' } }, f$(t.pnl)),
-                        React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: C.yellow } },
-                            "\u2212",
-                            f$(t.tradeFee || t.fees)),
-                        React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: (t.swapDays || 0) > 0 ? '#a07af0' : C.textFaint }, title: (t.swapDays || 0) > 0 ? `${t.swapDays}d × 0.033% = ${f$(t.swapFee || 0)}` : 'No overnight hold' }, (t.swapDays || 0) > 0 ? `−${f$(t.swapFee || 0)}` : '—'),
-                        React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 12, textAlign: 'right', color: t.pnlNet >= 0 ? C.green : C.red, fontWeight: 700 } }, f$(t.pnlNet)))))))))));
+                    React.createElement("tbody", null, rows.map(row => {
+                        if (row.type === 'divider') {
+                            return (React.createElement("tr", { key: row.key, style: { background: C.bg } },
+                                React.createElement("td", { colSpan: 15, style: { padding: '7px 14px', borderTop: `2px solid ${C.border2}`, borderBottom: `1px solid ${C.border}` } },
+                                    React.createElement("span", { style: { fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase' } }, new Date(row.day + 'T00:00:00Z').toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })))));
+                        }
+                        const t = row.trade;
+                        const rr = t.rMultipleNet;
+                        return (React.createElement("tr", { key: row.key, onClick: () => onEdit(t), style: { borderBottom: `1px solid ${C.border}`, cursor: 'pointer' }, onMouseEnter: e => e.currentTarget.style.background = C.cardHov, onMouseLeave: e => e.currentTarget.style.background = 'transparent' },
+                            React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.entryTime)),
+                            React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.exitTime)),
+                            React.createElement("td", { style: { padding: '9px 12px', fontWeight: 600, color: C.text } }, t.symbol.replace('BYBIT:', '')),
+                            React.createElement("td", { style: { padding: '9px 12px' } },
+                                React.createElement("span", { style: { fontSize: 9, padding: '3px 7px', borderRadius: 3, background: t.direction === 'long' ? C.greenBg : C.redBg, color: t.direction === 'long' ? C.green : C.red, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' } }, t.direction)),
+                            React.createElement("td", { style: { padding: '9px 12px' } }, (t.setupTags || []).length ? React.createElement("div", { style: { display: 'flex', gap: 3, flexWrap: 'wrap' } }, (t.setupTags || []).map(s => React.createElement("span", { key: s, style: { fontSize: 9, padding: '2px 6px', background: 'rgba(74,127,212,0.1)', border: '1px solid rgba(74,127,212,0.3)', color: C.blue, borderRadius: 3, fontWeight: 600 } }, s))) : React.createElement("span", { style: { color: C.textFaint, fontSize: 10 } }, "\u2014")),
+                            React.createElement("td", { style: { padding: '9px 12px' } }, t.rating > 0 ? React.createElement("span", { style: { color: C.yellow, letterSpacing: 1 } },
+                                '★'.repeat(t.rating),
+                                '☆'.repeat(5 - t.rating)) : React.createElement("span", { style: { color: C.textFaint, fontSize: 10 } }, "\u2014")),
+                            React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right' } }, t.qty),
+                            React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right' } }, f$(t.entryPrice, 2)),
+                            React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right' } }, f$(t.exitPrice, 2)),
+                            React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: t.pnlNet >= 0 ? C.green : C.red } }, fpct(t.pnlPctNet)),
+                            React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: t.pnl >= 0 ? '#4a7a5a' : '#7a4a4a' } }, f$(t.pnl)),
+                            React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: C.yellow } },
+                                "\u2212",
+                                f$(t.tradeFee || t.fees)),
+                            React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: (t.swapDays || 0) > 0 ? '#a07af0' : C.textFaint } }, (t.swapDays || 0) > 0 ? `−${f$(t.swapFee || 0)}` : '—'),
+                            React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 12, textAlign: 'right', fontWeight: 700, color: rr >= 0 ? C.green : C.red } },
+                                rr >= 0 ? '+' : '',
+                                fnum(rr, 2),
+                                "R"),
+                            React.createElement("td", { style: { padding: '9px 12px', fontFamily: C.mono, fontSize: 12, textAlign: 'right', color: t.pnlNet >= 0 ? C.green : C.red, fontWeight: 700 } }, f$(t.pnlNet))));
+                    })))))));
 }
 // ─── Prop Firm Tab ────────────────────────────────────────────────────────────
 function PropFirmTab({ ps, sett, setSett, trades }) {
@@ -1809,10 +1829,10 @@ function ReportTab({ stats, trades, dailyPnl, dailyCount, weeklyStats, sett }) {
             cl = 0;
         }
     }
-    // ── Per-trade stats ──
+    // Breakeven = gross P&L between -1 and +1 (before fees)
     const wins = trades.filter(t => t.pnlNet > 0);
     const losses = trades.filter(t => t.pnlNet < 0);
-    const scratches = trades.filter(t => t.pnlNet === 0);
+    const scratches = trades.filter(t => Math.abs(t.pnl || 0) <= 1); // gross within ±$1
     const largestProfit = wins.length ? Math.max(...wins.map(t => t.pnlNet)) : 0;
     const largestLoss = losses.length ? Math.min(...losses.map(t => t.pnlNet)) : 0;
     const totalCommissions = trades.reduce((s, t) => s + (t.tradeFee || 0), 0);
@@ -1894,7 +1914,7 @@ function ReportTab({ stats, trades, dailyPnl, dailyCount, weeklyStats, sett }) {
                     React.createElement(Row, { label: "Total number of trades", value: stats.n }),
                     React.createElement(Row, { label: "Number of winning trades", value: stats.wins, color: C.green }),
                     React.createElement(Row, { label: "Number of losing trades", value: stats.losses, color: C.red }),
-                    React.createElement(Row, { label: "Number of break even trades", value: stats.n - stats.wins - stats.losses, color: C.textDim })),
+                    React.createElement(Row, { label: "Number of break even trades", value: scratches.length, color: C.textDim })),
                 React.createElement(Section, { title: "Streaks" },
                     React.createElement(Row, { label: "Max consecutive wins", value: stats.lW, color: C.green }),
                     React.createElement(Row, { label: "Max consecutive losses", value: stats.lL, color: C.red })),
@@ -1912,12 +1932,10 @@ function ReportTab({ stats, trades, dailyPnl, dailyCount, weeklyStats, sett }) {
                     React.createElement(Row, { label: "Average realized R-Multiple", value: fnum(avgRealizedR, 2) + 'R', color: avgRealizedR >= 0 ? C.green : C.red }))),
             React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
                 React.createElement(Section, { title: "Trading Days" },
-                    React.createElement(Row, { label: "Open trades", value: 0, color: C.textDim }),
                     React.createElement(Row, { label: "Total trading days", value: tradingDays }),
                     React.createElement(Row, { label: "Winning days", value: winningDays, color: C.green }),
                     React.createElement(Row, { label: "Losing days", value: losingDays, color: C.red }),
                     React.createElement(Row, { label: "Breakeven days", value: breakevenDays, color: C.textDim }),
-                    React.createElement(Row, { label: "Logged days", value: loggedDays, color: C.textDim }),
                     React.createElement(Row, { label: "Average daily volume (trades/day)", value: fnum(avgDailyVol, 2) })),
                 React.createElement(Section, { title: "Consecutive Day Streaks" },
                     React.createElement(Row, { label: "Max consecutive winning days", value: maxConsDayWin, color: C.green }),
