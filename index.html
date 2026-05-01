@@ -177,6 +177,8 @@ const DEF = {
     startingBalance: 10000, riskPerTrade: 10, feeRate: 0.04, swapRate: 0.033,
     propAccountSize: 5000, propProfitTargetPct: 10, propDailyLossPct: 3,
     propMaxDDPct: 6, propProfitSplitPct: 90,
+    customSetups: ['OB', 'BOS', 'CHoCH', 'Breaker', 'LQ Grab', 'FVG', 'MSS', 'Other'],
+    customExecs: ['FOMO Entry', 'Revenge Trade', 'Moved SL', 'Early Exit', 'Late Entry', 'Overlevered', 'No Confluence', 'Perfect Execution', 'Missed Entry', 'Hesitation'],
 };
 const SETUPS = ['OB', 'BOS', 'CHoCH', 'Breaker', 'LQ Grab', 'FVG', 'MSS', 'Other'];
 const EXECS = ['FOMO Entry', 'Revenge Trade', 'Moved SL', 'Early Exit', 'Late Entry', 'Overlevered', 'No Confluence', 'Perfect Execution', 'Missed Entry', 'Hesitation'];
@@ -782,7 +784,6 @@ function App() {
             return stats;
         const lastEntry = balanceCurve[balanceCurve.length - 1];
         const firstEntry = balanceCurve[0];
-        const realNetPnl = lastEntry.equity - firstEntry.equity;
         const realFinalEq = lastEntry.equity;
         // Rebuild daily bars from balance daily P&L
         const realDailyArr = balanceDailyPnl
@@ -799,7 +800,7 @@ function App() {
         return {
             ...stats,
             curve: balanceCurve,
-            netPnl: realNetPnl,
+            // Keep trade-based netPnl (includes swap fees) — don't override with raw equity delta
             finalEq: realFinalEq,
             finalEqG: realFinalEq,
             peak: peak2,
@@ -894,7 +895,6 @@ function App() {
         { id: 'dashboard', icon: React.createElement(IconGrid, { size: 18 }), label: 'Dashboard' },
         { id: 'analytics', icon: React.createElement(IconChart, { size: 18 }), label: 'Analytics' },
         { id: 'report', icon: React.createElement(IconReport, { size: 18 }), label: 'Report' },
-        { id: 'playbook', icon: React.createElement(IconBook, { size: 18 }), label: 'Playbook' },
         { id: 'trades', icon: React.createElement(IconList, { size: 18 }), label: 'Trades' },
         { id: 'propfirm', icon: React.createElement(IconShield, { size: 18 }), label: 'Prop Firm' },
         { id: 'settings', icon: React.createElement(IconGear, { size: 18 }), label: 'Settings' },
@@ -958,7 +958,6 @@ function App() {
                 tab === 'dashboard' && statsWithBalance && React.createElement(Dashboard, { stats: statsWithBalance, sett: sett, dailyPnl: dailyPnl, dailyCount: dailyCount, allTrades: filtered, onEdit: setEditing }),
                 tab === 'analytics' && statsWithBalance && React.createElement(Analytics, { stats: statsWithBalance, sessionStats: sessionStats, hourStats: hourStats, setupStats: setupStats, execStats: execStats, weeklyStats: weeklyStats, trades: filtered }),
                 tab === 'report' && statsWithBalance && React.createElement(ReportTab, { stats: statsWithBalance, trades: filtered, dailyPnl: balanceDailyPnl || dailyPnl, dailyCount: dailyCount, weeklyStats: weeklyStats, sett: sett }),
-                tab === 'playbook' && React.createElement(PlaybookTab, { trades: enriched, meta: meta, upMeta: upMeta }),
                 tab === 'trades' && React.createElement(TradesTab, { trades: sortedTrades, sk: sk, sd: sd, doSort: doSort, onEdit: setEditing }),
                 tab === 'propfirm' && propStats && React.createElement(PropFirmTab, { ps: propStats, sett: sett, setSett: saveS, trades: filtered }),
                 tab === 'settings' && React.createElement(SettingsTab, { sett: sett, setSett: saveS }))))),
@@ -967,7 +966,7 @@ function App() {
                 React.createElement("div", { style: { fontSize: 48, marginBottom: 16 } }, "\uD83D\uDCC2"),
                 React.createElement("div", { style: { fontFamily: C.mono, fontSize: 20, fontWeight: 700, color: C.blue, letterSpacing: '0.04em' } }, "Drop CSV to import"),
                 React.createElement("div", { style: { fontSize: 13, color: C.textDim, marginTop: 8 } }, "Order History or Balance History")))),
-        editing && React.createElement(EditModal, { trade: editing, meta: meta[editing.id] || {}, onSave: p => { upMeta(editing.id, p); setEditing(null); }, onClose: () => setEditing(null) })));
+        editing && React.createElement(EditModal, { trade: editing, meta: meta[editing.id] || {}, sett: sett, onSave: p => { upMeta(editing.id, p); setEditing(null); }, onClose: () => setEditing(null), onSettChange: saveS })));
 }
 const btnStyle = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: C.card, border: `1px solid ${C.border2}`, color: C.text, fontSize: 11, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5, fontWeight: 500 };
 // ─── Empty State ──────────────────────────────────────────────────────────────
@@ -1408,119 +1407,6 @@ function Analytics({ stats, sessionStats, hourStats, setupStats, execStats, week
                         React.createElement("td", { style: { padding: '8px 12px', fontFamily: C.mono, fontSize: 12, fontWeight: 700, color: w.pnl >= 0 ? C.green : C.red, textAlign: 'right' } }, f$(w.pnl))));
                 }))))));
 }
-// ─── Playbook / Trade Record Tab ─────────────────────────────────────────────
-function PlaybookTab({ trades, meta, upMeta }) {
-    const [selected, setSelected] = useState(null);
-    const [note, setNote] = useState('');
-    const [imgSrc, setImgSrc] = useState(null);
-    const [filter, setFilter] = useState('all');
-    const imgRef = useRef(null);
-    const sorted = [...trades].sort((a, b) => b.exitTime - a.exitTime);
-    const filtered = filter === 'all' ? sorted : filter === 'wins' ? sorted.filter(t => t.pnlNet > 0) : sorted.filter(t => t.pnlNet < 0);
-    const openTrade = (t) => {
-        setSelected(t);
-        const m = meta[t.id] || {};
-        setNote(m.note || '');
-        setImgSrc(m.screenshot || null);
-    };
-    const save = () => {
-        if (!selected)
-            return;
-        upMeta(selected.id, { note, screenshot: imgSrc });
-        setSelected(null);
-    };
-    const handleImg = e => {
-        var _a;
-        const file = (_a = e.target.files) === null || _a === void 0 ? void 0 : _a[0];
-        if (!file)
-            return;
-        const reader = new FileReader();
-        reader.onload = ev => setImgSrc(ev.target.result);
-        reader.readAsDataURL(file);
-        e.target.value = '';
-    };
-    const handleImgDrop = e => {
-        var _a;
-        e.preventDefault();
-        const file = (_a = e.dataTransfer.files) === null || _a === void 0 ? void 0 : _a[0];
-        if (!file || !file.type.startsWith('image/'))
-            return;
-        const reader = new FileReader();
-        reader.onload = ev => setImgSrc(ev.target.result);
-        reader.readAsDataURL(file);
-    };
-    return (React.createElement("div", { style: { padding: '20px 24px', display: 'flex', gap: 16, height: 'calc(100vh - 54px)', overflow: 'hidden' } },
-        React.createElement("div", { style: { width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' } },
-            React.createElement("div", { style: { padding: '12px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 } },
-                React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: '0.05em' } }, "Trade Record"),
-                React.createElement("div", { style: { display: 'flex', gap: 4 } }, [['all', 'All'], ['wins', 'Wins'], ['losses', 'Losses']].map(([v, l]) => (React.createElement("button", { key: v, onClick: () => setFilter(v), style: { padding: '4px 8px', fontSize: 9, fontFamily: C.sans, cursor: 'pointer', borderRadius: 4, border: `1px solid ${filter === v ? C.blue : C.border2}`, background: filter === v ? 'rgba(74,127,212,0.2)' : 'transparent', color: filter === v ? C.blue : C.textDim, fontWeight: filter === v ? 700 : 400 } }, l))))),
-            React.createElement("div", { style: { flex: 1, overflowY: 'auto' } }, filtered.map(t => {
-                const m = meta[t.id] || {};
-                const hasNote = !!(m.note || m.screenshot);
-                const isActive = (selected === null || selected === void 0 ? void 0 : selected.id) === t.id;
-                return (React.createElement("div", { key: t.id, onClick: () => openTrade(t), style: { padding: '11px 14px', borderBottom: `1px solid ${C.border}`, cursor: 'pointer', background: isActive ? 'rgba(74,127,212,0.12)' : 'transparent', transition: 'background 0.1s' }, onMouseEnter: e => { if (!isActive)
-                        e.currentTarget.style.background = C.cardHov; }, onMouseLeave: e => { e.currentTarget.style.background = isActive ? 'rgba(74,127,212,0.12)' : 'transparent'; } },
-                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 } },
-                        React.createElement("div", { style: { display: 'flex', gap: 7, alignItems: 'center' } },
-                            React.createElement("span", { style: { fontWeight: 700, fontSize: 12, color: C.text } }, t.symbol.replace('BYBIT:', '')),
-                            React.createElement("span", { style: { fontSize: 9, padding: '2px 6px', borderRadius: 3, background: t.direction === 'long' ? C.greenBg : C.redBg, color: t.direction === 'long' ? C.green : C.red, fontWeight: 700, textTransform: 'uppercase' } }, t.direction),
-                            hasNote && React.createElement("span", { style: { fontSize: 9, color: C.blue, opacity: 0.7 } }, "\u270E"),
-                            m.screenshot && React.createElement("span", { style: { fontSize: 9, color: '#a07af0', opacity: 0.7 } }, "\uD83D\uDDBC")),
-                        React.createElement("span", { style: { fontFamily: C.mono, fontSize: 12, fontWeight: 700, color: t.pnlNet >= 0 ? C.green : C.red } },
-                            t.pnlNet >= 0 ? '+' : '',
-                            f$(t.pnlNet))),
-                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.textDim } },
-                        React.createElement("span", null,
-                            fdateS(t.entryTime),
-                            " \u2192 ",
-                            fdateS(t.exitTime)),
-                        m.rating > 0 && React.createElement("span", { style: { color: C.yellow } }, '★'.repeat(m.rating))),
-                    m.note && React.createElement("div", { style: { fontSize: 10, color: C.textFaint, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 } }, m.note)));
-            }))),
-        selected ? (React.createElement("div", { style: { flex: 1, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' } },
-            React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px', flexShrink: 0 } },
-                React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 } },
-                    React.createElement("div", { style: { display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' } },
-                        React.createElement("span", { style: { fontWeight: 700, fontSize: 18, color: C.text } }, selected.symbol.replace('BYBIT:', '')),
-                        React.createElement("span", { style: { fontSize: 10, padding: '3px 9px', borderRadius: 4, background: selected.direction === 'long' ? C.greenBg : C.redBg, color: selected.direction === 'long' ? C.green : C.red, fontWeight: 700, textTransform: 'uppercase' } }, selected.direction),
-                        React.createElement("span", { style: { fontFamily: C.mono, fontSize: 18, fontWeight: 700, color: selected.pnlNet >= 0 ? C.green : C.red } }, f$(selected.pnlNet))),
-                    React.createElement("div", { style: { display: 'flex', gap: 20, flexWrap: 'wrap' } }, [['Entry', f$(selected.entryPrice, 2)], ['Exit', f$(selected.exitPrice, 2)], ['Qty', selected.qty], ['Trade Fee', `−${f$(selected.tradeFee || selected.fees)}`], ['Swap', selected.swapDays > 0 ? `${selected.swapDays}d −${f$(selected.swapFee || 0)}` : '—'], ['Gross', f$(selected.pnl)]].map(([l, v]) => (React.createElement("div", { key: l, style: { textAlign: 'right' } },
-                        React.createElement("div", { style: { fontSize: 9, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 } }, l),
-                        React.createElement("div", { style: { fontFamily: C.mono, fontSize: 12, fontWeight: 600, color: C.text } }, v)))))),
-                React.createElement("div", { style: { fontSize: 10, color: C.textDim, marginTop: 8, fontFamily: C.mono } },
-                    "Opened ",
-                    fdate(selected.entryTime),
-                    " \u2192 Closed ",
-                    fdate(selected.exitTime),
-                    (selected.swapDays || 0) > 0 && React.createElement("span", { style: { color: '#a07af0', marginLeft: 12 } },
-                        "\u27F3 ",
-                        selected.swapDays,
-                        " swap day",
-                        selected.swapDays !== 1 ? 's' : ''))),
-            React.createElement("div", { style: { flex: 1, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden', minHeight: 0 } },
-                React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: '1 1 0', minHeight: 0 } },
-                    React.createElement("div", { style: { padding: '10px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 } },
-                        React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: '0.05em' } }, "Chart Screenshot"),
-                        React.createElement("div", { style: { display: 'flex', gap: 8 } },
-                            imgSrc && React.createElement("button", { onClick: () => setImgSrc(null), style: { background: 'none', border: `1px solid ${C.border2}`, color: C.red, cursor: 'pointer', padding: '3px 8px', fontSize: 10, borderRadius: 4, fontFamily: C.sans } }, "Remove"),
-                            React.createElement("button", { onClick: () => { var _a; return (_a = imgRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, style: { background: 'rgba(74,127,212,0.15)', border: `1px solid rgba(74,127,212,0.4)`, color: C.blue, cursor: 'pointer', padding: '4px 10px', fontSize: 10, fontWeight: 600, borderRadius: 4, fontFamily: C.sans } }, "Upload"),
-                            React.createElement("input", { ref: imgRef, type: "file", accept: "image/*", onChange: handleImg, style: { display: 'none' } }))),
-                    React.createElement("div", { style: { flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg, minHeight: 0 }, onDragOver: e => e.preventDefault(), onDrop: handleImgDrop }, imgSrc ? (React.createElement("img", { src: imgSrc, alt: "Trade chart", style: { maxWidth: '100%', maxHeight: '100%', width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'high-quality' } })) : (React.createElement("div", { style: { textAlign: 'center', padding: 32 } },
-                        React.createElement("div", { style: { fontSize: 40, marginBottom: 12, opacity: 0.2 } }, "\uD83D\uDCC8"),
-                        React.createElement("div", { style: { fontSize: 13, color: C.textDim, marginBottom: 6 } }, "Drop a screenshot here or click Upload"),
-                        React.createElement("div", { style: { fontSize: 10, color: C.textFaint } }, "Landscape screenshots work best"))))),
-                React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, display: 'flex', flexDirection: 'column', flexShrink: 0, minHeight: 130, maxHeight: 160 } },
-                    React.createElement("div", { style: { padding: '8px 14px', borderBottom: `1px solid ${C.border}`, flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-                        React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: '0.05em' } }, "Trade Notes"),
-                        React.createElement("div", { style: { display: 'flex', gap: 8 } },
-                            React.createElement("button", { onClick: () => setSelected(null), style: { padding: '5px 12px', background: 'transparent', border: `1px solid ${C.border2}`, color: C.textDim, fontSize: 11, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Cancel"),
-                            React.createElement("button", { onClick: save, style: { padding: '5px 14px', background: C.blue, border: 'none', color: 'white', fontSize: 11, fontWeight: 700, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Save"))),
-                    React.createElement("textarea", { value: note, onChange: e => setNote(e.target.value), placeholder: 'Why did you enter? What was the setup? What would you do differently?', style: { flex: 1, background: 'transparent', border: 'none', color: C.text, padding: '10px 14px', fontSize: 12, fontFamily: C.sans, outline: 'none', resize: 'none', lineHeight: 1.7 } }))))) : (React.createElement("div", { style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8 } },
-            React.createElement("div", { style: { textAlign: 'center', padding: 48 } },
-                React.createElement("div", { style: { fontSize: 40, marginBottom: 16, opacity: 0.2 } }, "\uD83D\uDCCB"),
-                React.createElement("div", { style: { fontSize: 14, fontWeight: 600, color: C.textDim, marginBottom: 8 } }, "Select a trade to review"),
-                React.createElement("div", { style: { fontSize: 12, color: C.textFaint } }, "Upload chart screenshots and write notes for each trade"))))));
-}
 // ─── Trades Tab ───────────────────────────────────────────────────────────────
 function TradesTab({ trades, sk, sd, doSort, onEdit }) {
     const SH = ({ k, children, align = 'left' }) => (React.createElement("th", { onClick: () => doSort(k), style: { padding: '10px 12px', borderBottom: `1px solid ${C.border}`, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 600, cursor: 'pointer', textAlign: align, whiteSpace: 'nowrap', background: C.bg } },
@@ -1729,7 +1615,7 @@ function PropFirmTab({ ps, sett, setSett, trades }) {
                                     React.createElement("stop", { offset: "5%", stopColor: sc, stopOpacity: 0.2 }),
                                     React.createElement("stop", { offset: "95%", stopColor: sc, stopOpacity: 0 }))),
                             React.createElement(XAxis, { dataKey: "idx", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false }),
-                            React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${(v / 1000).toFixed(1)}k`, width: 52, domain: [Math.min(ps.floor - 100, ps.equity - 100), Math.max(ps.sz + ps.pt + 100, ps.equity + 100)] }),
+                            React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${(v / 1000).toFixed(2)}k`, width: 58, domain: [ps.floor - 100, ps.sz + ps.pt + 100] }),
                             React.createElement(Tooltip, { contentStyle: { background: C.bg, border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono, borderRadius: 6, color: C.text }, itemStyle: { color: C.text }, formatter: v => [f$(v), 'Equity'], labelFormatter: l => `Trade #${l}` }),
                             React.createElement(ReferenceLine, { y: ps.sz, stroke: C.border2, strokeDasharray: "3 3", label: { value: 'Start', fill: C.textFaint, fontSize: 9, position: 'insideTopRight' } }),
                             React.createElement(ReferenceLine, { y: ps.floor, stroke: C.red, strokeDasharray: "3 3", label: { value: 'DD Floor', fill: C.red, fontSize: 9, position: 'insideTopRight' } }),
@@ -1992,50 +1878,98 @@ function SettingsTab({ sett, setSett }) {
                     React.createElement("span", { style: { fontFamily: C.mono, fontSize: 11, color: C.textDim } }, fee)))))))));
 }
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
-function EditModal({ trade, meta, onSave, onClose }) {
+function EditModal({ trade, meta, sett, onSave, onClose, onSettChange }) {
     const [note, setNote] = useState(meta.note || '');
     const [setupTags, setSetupTags] = useState(meta.setupTags || []);
     const [execTags, setExecTags] = useState(meta.execTags || []);
     const [rating, setRating] = useState(meta.rating || 0);
+    const [imgSrc, setImgSrc] = useState(meta.screenshot || null);
+    const [imgFull, setImgFull] = useState(false);
+    const [newSetup, setNewSetup] = useState('');
+    const [newExec, setNewExec] = useState('');
+    const [editingSetups, setEditingSetups] = useState(false);
+    const [editingExecs, setEditingExecs] = useState(false);
     const [hov, setHov] = useState(0);
+    const imgRef = useRef(null);
     const tog = (arr, set, tag) => set(arr.includes(tag) ? arr.filter(t => t !== tag) : [...arr, tag]);
-    return (React.createElement("div", { style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }, onClick: onClose },
-        React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border2}`, width: '100%', maxWidth: 560, maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: 10 }, onClick: e => e.stopPropagation() },
-            React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '18px 22px 14px', borderBottom: `1px solid ${C.border}` } },
-                React.createElement("div", null,
-                    React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: C.text } },
-                        trade.symbol,
-                        " ",
-                        React.createElement("span", { style: { color: trade.direction === 'long' ? C.green : C.red } }, trade.direction.toUpperCase())),
-                    React.createElement("div", { style: { fontSize: 11, color: C.textDim, marginTop: 3, fontFamily: C.mono } },
-                        fdate(trade.entryTime),
-                        " \u2192 ",
-                        fdate(trade.exitTime),
-                        " ",
-                        React.createElement("span", { style: { color: trade.pnlNet >= 0 ? C.green : C.red, marginLeft: 8 } }, f$(trade.pnlNet)))),
-                React.createElement("button", { onClick: onClose, style: { background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 4 } },
-                    React.createElement(IconX, { size: 16 }))),
-            React.createElement("div", { style: { flex: 1, overflowY: 'auto', padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 18 } },
-                React.createElement("div", null,
-                    React.createElement("div", { style: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700, marginBottom: 8 } }, "Rating"),
-                    React.createElement("div", { style: { display: 'flex', gap: 6, alignItems: 'center' } },
-                        [1, 2, 3, 4, 5].map(n => (React.createElement("button", { key: n, style: { background: 'none', border: 'none', cursor: 'pointer', padding: 2, fontSize: 22, color: (hov || rating) >= n ? C.yellow : '#2a3a50', lineHeight: 1 }, onMouseEnter: () => setHov(n), onMouseLeave: () => setHov(0), onClick: () => setRating(rating === n ? 0 : n) }, "\u2605"))),
-                        rating > 0 && React.createElement("span", { style: { fontSize: 11, color: C.textDim, marginLeft: 4 } }, ['', 'Poor', 'Below avg', 'Average', 'Good', 'A+ Setup'][rating]))),
-                React.createElement("div", null,
-                    React.createElement("div", { style: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700, marginBottom: 8 } }, "Setup Type"),
-                    React.createElement("div", { style: { display: 'flex', flexWrap: 'wrap', gap: 7 } }, SETUPS.map(tag => React.createElement("button", { key: tag, onClick: () => tog(setupTags, setSetupTags, tag), style: { background: setupTags.includes(tag) ? 'rgba(91,141,238,0.2)' : 'transparent', border: `1px solid ${setupTags.includes(tag) ? 'rgba(91,141,238,0.5)' : C.border2}`, color: setupTags.includes(tag) ? C.blue : C.textDim, padding: '5px 12px', fontSize: 11, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5, fontWeight: setupTags.includes(tag) ? 700 : 400, transition: 'all 0.12s' } }, tag)))),
-                React.createElement("div", null,
-                    React.createElement("div", { style: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700, marginBottom: 8 } }, "Execution Tags"),
-                    React.createElement("div", { style: { display: 'flex', flexWrap: 'wrap', gap: 7 } }, EXECS.map(tag => {
-                        const a = execTags.includes(tag), good = tag === 'Perfect Execution';
-                        return (React.createElement("button", { key: tag, onClick: () => tog(execTags, setExecTags, tag), style: { background: a ? (good ? C.greenBg : C.redBg) : 'transparent', border: `1px solid ${a ? (good ? C.greenBd : C.redBd) : C.border2}`, color: a ? (good ? C.green : C.red) : C.textDim, padding: '5px 11px', fontSize: 11, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5, fontWeight: a ? 700 : 400, transition: 'all 0.12s' } }, tag));
-                    }))),
-                React.createElement("div", null,
-                    React.createElement("div", { style: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700, marginBottom: 8 } }, "Notes"),
-                    React.createElement("textarea", { value: note, onChange: e => setNote(e.target.value), placeholder: "What did you see? What did you miss? A+ or B setup?", style: { background: C.main, border: `1px solid ${C.border2}`, color: C.text, padding: '10px 12px', fontSize: 12, fontFamily: C.sans, borderRadius: 5, outline: 'none', resize: 'vertical', lineHeight: 1.6, width: '100%' }, rows: 4 }))),
-            React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 22px', borderTop: `1px solid ${C.border}` } },
-                React.createElement("button", { onClick: onClose, style: { padding: '8px 18px', background: 'transparent', border: `1px solid ${C.border2}`, color: C.textDim, fontSize: 12, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Cancel"),
-                React.createElement("button", { onClick: () => onSave({ note, setupTags, execTags, rating }), style: { padding: '8px 20px', background: C.blue, border: 'none', color: 'white', fontSize: 12, fontWeight: 700, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Save")))));
+    const SETUPS = sett.customSetups || DEF.customSetups;
+    const EXECS = sett.customExecs || DEF.customExecs;
+    const addSetup = () => { const v = newSetup.trim(); if (v && !SETUPS.includes(v)) {
+        onSettChange({ ...sett, customSetups: [...SETUPS, v] });
+        setNewSetup('');
+    } };
+    const removeSetup = tag => { onSettChange({ ...sett, customSetups: SETUPS.filter(s => s !== tag) }); setSetupTags(st => st.filter(s => s !== tag)); };
+    const addExec = () => { const v = newExec.trim(); if (v && !EXECS.includes(v)) {
+        onSettChange({ ...sett, customExecs: [...EXECS, v] });
+        setNewExec('');
+    } };
+    const removeExec = tag => { onSettChange({ ...sett, customExecs: EXECS.filter(e => e !== tag) }); setExecTags(et => et.filter(e => e !== tag)); };
+    const handleImg = e => { var _a; const f = (_a = e.target.files) === null || _a === void 0 ? void 0 : _a[0]; if (!f)
+        return; const r = new FileReader(); r.onload = ev => setImgSrc(ev.target.result); r.readAsDataURL(f); e.target.value = ''; };
+    return (React.createElement(React.Fragment, null,
+        imgFull && (React.createElement("div", { style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }, onClick: () => setImgFull(false) },
+            React.createElement("img", { src: imgSrc, alt: "Trade", style: { maxWidth: '96vw', maxHeight: '96vh', objectFit: 'contain', borderRadius: 6 } }),
+            React.createElement("button", { onClick: () => setImgFull(false), style: { position: 'absolute', top: 20, right: 24, background: 'none', border: 'none', color: 'white', fontSize: 28, cursor: 'pointer', lineHeight: 1 } }, "\u00D7"))),
+        React.createElement("div", { style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }, onClick: onClose },
+            React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border2}`, width: '100%', maxWidth: 640, maxHeight: '92vh', display: 'flex', flexDirection: 'column', borderRadius: 10 }, onClick: e => e.stopPropagation() },
+                React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '16px 20px 12px', borderBottom: `1px solid ${C.border}` } },
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: C.text } },
+                            trade.symbol.replace('BYBIT:', ''),
+                            " ",
+                            React.createElement("span", { style: { color: trade.direction === 'long' ? C.green : C.red } }, trade.direction.toUpperCase())),
+                        React.createElement("div", { style: { fontSize: 11, color: C.textDim, marginTop: 3, fontFamily: C.mono } },
+                            fdate(trade.entryTime),
+                            " \u2192 ",
+                            fdate(trade.exitTime),
+                            " ",
+                            React.createElement("span", { style: { color: trade.pnlNet >= 0 ? C.green : C.red, marginLeft: 8 } }, f$(trade.pnlNet)))),
+                    React.createElement("button", { onClick: onClose, style: { background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 4, fontSize: 18, lineHeight: 1 } }, "\u00D7")),
+                React.createElement("div", { style: { flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 } },
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } },
+                            React.createElement("span", { style: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700 } }, "Chart Screenshot"),
+                            React.createElement("div", { style: { display: 'flex', gap: 6 } },
+                                imgSrc && React.createElement("button", { onClick: () => setImgSrc(null), style: { background: 'none', border: `1px solid ${C.border2}`, color: C.red, cursor: 'pointer', padding: '3px 8px', fontSize: 10, borderRadius: 4, fontFamily: C.sans } }, "Remove"),
+                                React.createElement("button", { onClick: () => { var _a; return (_a = imgRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, style: { background: 'rgba(74,127,212,0.15)', border: `1px solid rgba(74,127,212,0.4)`, color: C.blue, cursor: 'pointer', padding: '3px 10px', fontSize: 10, fontWeight: 600, borderRadius: 4, fontFamily: C.sans } }, "Upload"),
+                                React.createElement("input", { ref: imgRef, type: "file", accept: "image/*", onChange: handleImg, style: { display: 'none' } }))),
+                        imgSrc ? (React.createElement("div", { style: { position: 'relative', borderRadius: 6, overflow: 'hidden', border: `1px solid ${C.border}`, background: C.bg, cursor: 'zoom-in' }, onClick: () => setImgFull(true) },
+                            React.createElement("img", { src: imgSrc, alt: "Trade chart", style: { width: '100%', maxHeight: 200, objectFit: 'contain', display: 'block' } }),
+                            React.createElement("div", { style: { position: 'absolute', top: 6, right: 8, background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: 10, padding: '2px 7px', borderRadius: 3 } }, "click to expand"))) : (React.createElement("div", { onClick: () => { var _a; return (_a = imgRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, style: { border: `1px dashed ${C.border2}`, borderRadius: 6, padding: '20px', textAlign: 'center', cursor: 'pointer', color: C.textFaint, fontSize: 11 } }, "Click or drop a screenshot here"))),
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700, marginBottom: 8 } }, "Rating"),
+                        React.createElement("div", { style: { display: 'flex', gap: 6, alignItems: 'center' } },
+                            [1, 2, 3, 4, 5].map(n => (React.createElement("button", { key: n, style: { background: 'none', border: 'none', cursor: 'pointer', padding: 2, fontSize: 22, color: (hov || rating) >= n ? C.yellow : '#2a3a50', lineHeight: 1 }, onMouseEnter: () => setHov(n), onMouseLeave: () => setHov(0), onClick: () => setRating(rating === n ? 0 : n) }, "\u2605"))),
+                            rating > 0 && React.createElement("span", { style: { fontSize: 11, color: C.textDim, marginLeft: 4 } }, ['', 'Poor', 'Below avg', 'Average', 'Good', 'A+ Setup'][rating]))),
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } },
+                            React.createElement("span", { style: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700 } }, "Setup Type"),
+                            React.createElement("button", { onClick: () => setEditingSetups(v => !v), style: { background: editingSetups ? 'rgba(74,127,212,0.15)' : 'transparent', border: `1px solid ${editingSetups ? 'rgba(74,127,212,0.4)' : C.border2}`, color: editingSetups ? C.blue : C.textDim, padding: '3px 10px', fontSize: 10, fontFamily: C.sans, cursor: 'pointer', borderRadius: 4, fontWeight: editingSetups ? 700 : 400 } }, editingSetups ? 'Done' : 'Edit')),
+                        React.createElement("div", { style: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: editingSetups ? 8 : 0 } }, SETUPS.map(tag => (React.createElement("div", { key: tag, style: { display: 'flex', alignItems: 'center', gap: 0 } },
+                            React.createElement("button", { onClick: () => !editingSetups && tog(setupTags, setSetupTags, tag), style: { background: setupTags.includes(tag) ? 'rgba(74,127,212,0.2)' : 'transparent', border: `1px solid ${setupTags.includes(tag) ? 'rgba(74,127,212,0.5)' : C.border2}`, borderRight: editingSetups ? 'none' : '1px solid', borderRightColor: editingSetups ? 'transparent' : (setupTags.includes(tag) ? 'rgba(74,127,212,0.5)' : C.border2), color: setupTags.includes(tag) ? C.blue : C.textDim, padding: '5px 10px', fontSize: 11, fontFamily: C.sans, cursor: editingSetups ? 'default' : 'pointer', borderRadius: editingSetups ? '5px 0 0 5px' : '5px', fontWeight: setupTags.includes(tag) ? 700 : 400 } }, tag),
+                            editingSetups && React.createElement("button", { onClick: () => removeSetup(tag), style: { background: 'transparent', border: `1px solid ${C.border2}`, color: C.red, padding: '5px 6px', fontSize: 10, fontFamily: C.sans, cursor: 'pointer', borderRadius: '0 5px 5px 0', lineHeight: 1 } }, "\u00D7"))))),
+                        editingSetups && (React.createElement("div", { style: { display: 'flex', gap: 6, marginTop: 4 } },
+                            React.createElement("input", { value: newSetup, onChange: e => setNewSetup(e.target.value), onKeyDown: e => e.key === 'Enter' && addSetup(), placeholder: "New setup type\u2026", style: { flex: 1, background: C.main, border: `1px solid ${C.border2}`, color: C.text, padding: '5px 10px', fontSize: 11, fontFamily: C.sans, borderRadius: 4, outline: 'none' } }),
+                            React.createElement("button", { onClick: addSetup, style: { background: 'rgba(74,127,212,0.15)', border: `1px solid rgba(74,127,212,0.4)`, color: C.blue, padding: '5px 12px', fontSize: 11, fontFamily: C.sans, cursor: 'pointer', borderRadius: 4, fontWeight: 600 } }, "Add")))),
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } },
+                            React.createElement("span", { style: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700 } }, "Execution Tags"),
+                            React.createElement("button", { onClick: () => setEditingExecs(v => !v), style: { background: editingExecs ? 'rgba(74,127,212,0.15)' : 'transparent', border: `1px solid ${editingExecs ? 'rgba(74,127,212,0.4)' : C.border2}`, color: editingExecs ? C.blue : C.textDim, padding: '3px 10px', fontSize: 10, fontFamily: C.sans, cursor: 'pointer', borderRadius: 4, fontWeight: editingExecs ? 700 : 400 } }, editingExecs ? 'Done' : 'Edit')),
+                        React.createElement("div", { style: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: editingExecs ? 8 : 0 } }, EXECS.map(tag => {
+                            const a = execTags.includes(tag), good = tag === 'Perfect Execution';
+                            return (React.createElement("div", { key: tag, style: { display: 'flex', alignItems: 'center', gap: 0 } },
+                                React.createElement("button", { onClick: () => !editingExecs && tog(execTags, setExecTags, tag), style: { background: a ? (good ? C.greenBg : C.redBg) : 'transparent', border: `1px solid ${a ? (good ? C.greenBd : C.redBd) : C.border2}`, borderRight: editingExecs ? 'none' : '1px solid', borderRightColor: editingExecs ? 'transparent' : (a ? (good ? C.greenBd : C.redBd) : C.border2), color: a ? (good ? C.green : C.red) : C.textDim, padding: '5px 10px', fontSize: 11, fontFamily: C.sans, cursor: editingExecs ? 'default' : 'pointer', borderRadius: editingExecs ? '5px 0 0 5px' : '5px', fontWeight: a ? 700 : 400 } }, tag),
+                                editingExecs && React.createElement("button", { onClick: () => removeExec(tag), style: { background: 'transparent', border: `1px solid ${C.border2}`, color: C.red, padding: '5px 6px', fontSize: 10, fontFamily: C.sans, cursor: 'pointer', borderRadius: '0 5px 5px 0', lineHeight: 1 } }, "\u00D7")));
+                        })),
+                        editingExecs && (React.createElement("div", { style: { display: 'flex', gap: 6, marginTop: 4 } },
+                            React.createElement("input", { value: newExec, onChange: e => setNewExec(e.target.value), onKeyDown: e => e.key === 'Enter' && addExec(), placeholder: "New execution tag\u2026", style: { flex: 1, background: C.main, border: `1px solid ${C.border2}`, color: C.text, padding: '5px 10px', fontSize: 11, fontFamily: C.sans, borderRadius: 4, outline: 'none' } }),
+                            React.createElement("button", { onClick: addExec, style: { background: 'rgba(74,127,212,0.15)', border: `1px solid rgba(74,127,212,0.4)`, color: C.blue, padding: '5px 12px', fontSize: 11, fontFamily: C.sans, cursor: 'pointer', borderRadius: 4, fontWeight: 600 } }, "Add")))),
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700, marginBottom: 8 } }, "Notes"),
+                        React.createElement("textarea", { value: note, onChange: e => setNote(e.target.value), placeholder: "What did you see? What did you miss? A+ or B setup?", style: { background: C.main, border: `1px solid ${C.border2}`, color: C.text, padding: '10px 12px', fontSize: 12, fontFamily: C.sans, borderRadius: 5, outline: 'none', resize: 'vertical', lineHeight: 1.6, width: '100%' }, rows: 3 }))),
+                React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', borderTop: `1px solid ${C.border}` } },
+                    React.createElement("button", { onClick: onClose, style: { padding: '8px 18px', background: 'transparent', border: `1px solid ${C.border2}`, color: C.textDim, fontSize: 12, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Cancel"),
+                    React.createElement("button", { onClick: () => onSave({ note, setupTags, execTags, rating, screenshot: imgSrc }), style: { padding: '8px 20px', background: C.blue, border: 'none', color: 'white', fontSize: 12, fontWeight: 700, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Save"))))));
 }
 // ─── Panel helper ──────────────────────────────────────────────────────────────
 function Panel({ title, sub, children }) {
