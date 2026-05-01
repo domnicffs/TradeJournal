@@ -956,12 +956,6 @@ function App() {
                         " Import ",
                         React.createElement("span", { style: { fontSize: 9, color: C.textFaint, marginLeft: 2 } }, "[I]")),
                     React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: 'none' } }),
-                    balanceHistory.length > 0 && (React.createElement("div", { style: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: 'rgba(91,141,238,0.12)', border: '1px solid rgba(91,141,238,0.35)', borderRadius: 5, fontSize: 10, color: '#7aabff', fontWeight: 600 } },
-                        "\u2B21 ",
-                        balanceHistory.length,
-                        " pts",
-                        React.createElement("button", { onClick: () => { if (confirm('Remove balance history?'))
-                                saveBal([]); }, style: { background: 'none', border: 'none', color: '#7aabff', cursor: 'pointer', padding: 0, fontSize: 13, lineHeight: 1, opacity: 0.6 } }, "\u00D7"))),
                     React.createElement("button", { onClick: doExport, disabled: !trades.length, style: btnStyle },
                         React.createElement(IconExport, { size: 13 }),
                         " Export"),
@@ -1130,13 +1124,24 @@ function DashCalendar({ dailyPnl, dailyCount, trades }) {
     const monthPnl = monthTradeDays.reduce((s, d) => s + dailyPnl[d], 0);
     const monthWins = monthTradeDays.filter(d => dailyPnl[d] > 0).length;
     const monthWR = monthTradeDays.length > 0 ? monthWins / monthTradeDays.length * 100 : 0;
-    // Weekly breakdown
+    // Weekly breakdown — fill overflow cells with real dates from prev/next month
     const weeks = useMemo(() => {
-        const cells = Array.from({ length: fdow }, () => null)
-            .concat(Array.from({ length: dim }, (_, i) => `${ym}-${String(i + 1).padStart(2, '0')}`));
+        // Leading days from prev month
+        const prevMonthEnd = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), 0)); // last day of prev month
+        const leadCells = Array.from({ length: fdow }, (_, i) => {
+            const day = new Date(Date.UTC(prevMonthEnd.getUTCFullYear(), prevMonthEnd.getUTCMonth(), prevMonthEnd.getUTCDate() - fdow + i + 1));
+            return day.toISOString().slice(0, 10);
+        });
+        // Current month days
+        const monthCells = Array.from({ length: dim }, (_, i) => `${ym}-${String(i + 1).padStart(2, '0')}`);
+        const cells = [...leadCells, ...monthCells];
+        // Trailing days into next month
         const rem = cells.length % 7 === 0 ? 0 : 7 - cells.length % 7;
-        for (let i = 0; i < rem; i++)
-            cells.push(null);
+        const nextMonthStart = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 1));
+        for (let i = 0; i < rem; i++) {
+            const day = new Date(Date.UTC(nextMonthStart.getUTCFullYear(), nextMonthStart.getUTCMonth(), i + 1));
+            cells.push(day.toISOString().slice(0, 10));
+        }
         return Array.from({ length: cells.length / 7 }, (_, wi) => {
             const row = cells.slice(wi * 7, wi * 7 + 7);
             const tradeDays = row.filter(d => d && dailyPnl[d] != null);
@@ -1149,7 +1154,7 @@ function DashCalendar({ dailyPnl, dailyCount, trades }) {
             return { days: row, pnl, wins, losses: tradeDays.filter(d => dailyPnl[d] < 0).length, tradeDays: tradeDays.length,
                 wr: tradeDays.length > 0 ? wins / tradeDays.length * 100 : 0, trades: allTrades, fees, bestDay, worstDay };
         });
-    }, [ym, fdow, dim, dailyPnl, trades]);
+    }, [ym, fdow, dim, d0, dailyPnl, trades]);
     // Trades for selected day
     const dayTrades = useMemo(() => {
         if (!selectedDay)
@@ -1179,18 +1184,23 @@ function DashCalendar({ dailyPnl, dailyCount, trades }) {
                 var _a, _b;
                 if (!key)
                     return React.createElement("div", { key: `e${wi}-${di}`, style: { borderRight: `1px solid ${C.border}`, minHeight: 80, background: C.main } });
+                const isCurrentMonth = key.startsWith(ym);
                 const pnl = (_a = dailyPnl[key]) !== null && _a !== void 0 ? _a : null, cnt = (_b = dailyCount[key]) !== null && _b !== void 0 ? _b : 0;
                 const hasData = pnl !== null;
                 const isToday = today === key;
                 const isSelected = selectedDay === key;
-                const bg = isSelected ? 'rgba(74,127,212,0.2)' : hasData ? (pnl >= 0 ? 'rgba(38,166,91,0.14)' : 'rgba(224,82,82,0.14)') : C.main;
+                const overflowBg = 'rgba(255,255,255,0.01)';
+                const bg = isSelected ? 'rgba(74,127,212,0.2)' : hasData ? (pnl >= 0 ? 'rgba(38,166,91,0.14)' : 'rgba(224,82,82,0.14)') : (isCurrentMonth ? C.main : overflowBg);
                 const textCol = hasData ? (pnl >= 0 ? C.green : C.red) : C.textFaint;
                 const [, , dayNum] = key.split('-');
                 const winsToday = hasData ? (trades || []).filter(t => isoDay(t.exitTime) === key && t.pnlNet > 0).length : 0;
                 const dayWR = cnt > 0 ? winsToday / cnt * 100 : 0;
-                return (React.createElement("div", { key: key, onClick: () => { setSelectedWeek(null); setSelectedDay(isSelected ? null : key); }, style: { background: bg, borderRight: `1px solid ${C.border}`, padding: '8px 10px', display: 'flex', flexDirection: 'column', minHeight: 80, cursor: hasData ? 'pointer' : 'default', outline: isSelected ? `2px solid ${C.blue}` : isToday ? `2px solid rgba(74,127,212,0.4)` : 'none', outlineOffset: '-2px', transition: 'background 0.1s' }, onMouseEnter: e => { if (hasData && !isSelected)
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }, onMouseLeave: e => { e.currentTarget.style.background = isSelected ? 'rgba(74,127,212,0.2)' : hasData ? (pnl >= 0 ? 'rgba(38,166,91,0.14)' : 'rgba(224,82,82,0.14)') : C.main; } },
-                    React.createElement("div", { style: { textAlign: 'right', fontSize: 11, color: isToday ? C.blue : C.textFaint, fontWeight: isToday ? 700 : 400, lineHeight: 1, marginBottom: 4 } }, parseInt(dayNum)),
+                return (React.createElement("div", { key: key, onClick: () => { if (hasData) {
+                        setSelectedWeek(null);
+                        setSelectedDay(isSelected ? null : key);
+                    } }, style: { background: bg, borderRight: `1px solid ${C.border}`, padding: '8px 10px', display: 'flex', flexDirection: 'column', minHeight: 80, cursor: hasData ? 'pointer' : 'default', outline: isSelected ? `2px solid ${C.blue}` : isToday ? `2px solid rgba(74,127,212,0.4)` : 'none', outlineOffset: '-2px', transition: 'background 0.1s', opacity: isCurrentMonth ? 1 : 0.6 }, onMouseEnter: e => { if (hasData && !isSelected)
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }, onMouseLeave: e => { e.currentTarget.style.background = isSelected ? 'rgba(74,127,212,0.2)' : hasData ? (pnl >= 0 ? 'rgba(38,166,91,0.14)' : 'rgba(224,82,82,0.14)') : (isCurrentMonth ? C.main : overflowBg); } },
+                    React.createElement("div", { style: { textAlign: 'right', fontSize: 11, color: isToday ? C.blue : isCurrentMonth ? C.textFaint : 'rgba(255,255,255,0.2)', fontWeight: isToday ? 700 : 400, lineHeight: 1, marginBottom: 4 } }, parseInt(dayNum)),
                     hasData && React.createElement(React.Fragment, null,
                         React.createElement("div", { style: { fontFamily: C.mono, fontSize: 14, fontWeight: 700, color: textCol, lineHeight: 1.2, textAlign: 'center' } }, f$(pnl, 0)),
                         React.createElement("div", { style: { fontSize: 10, color: C.textDim, textAlign: 'center', marginTop: 3 } },
