@@ -476,7 +476,15 @@ const fnum = (n, dp = 2) => { if (n == null || !isFinite(n))
 const fdate = ts => new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
 const fdateS = ts => new Date(ts).toLocaleString('en-GB', { month: 'short', day: '2-digit' });
 const isoDay = ts => new Date(ts).toISOString().slice(0, 10);
-const isoWeek = ts => { const d = new Date(ts), day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day); const ys = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return `${d.getUTCFullYear()}-W${String(Math.ceil(((d - ys) / 86400000 + 1) / 7)).padStart(2, '0')}`; };
+// Week key: Sun–Sat, keyed as YYYY-WNN where week 1 starts on the first Sunday of the year
+const isoWeek = ts => {
+    const d = new Date(ts);
+    const day = d.getUTCDay(); // 0=Sun
+    const sun = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day));
+    const jan1 = new Date(Date.UTC(sun.getUTCFullYear(), 0, 1));
+    const weekNum = Math.floor(((sun - jan1) / 86400000) / 7) + 1;
+    return `${sun.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+};
 const sessionOf = ts => { const h = new Date(ts).getUTCHours(); if (h < 7)
     return 'Asia'; if (h < 12)
     return 'London'; if (h < 16)
@@ -1007,7 +1015,7 @@ function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit }) {
             React.createElement(TopCard, { label: "Profit Factor", value: fnum(isFinite(stats.pf) ? stats.pf : 0), sub: `${f$(stats.gW, 0)} / ${f$(stats.gL, 0)}`, gauge: true, gaugeVal: Math.min(1, stats.pf / 3) }),
             React.createElement(TopCard, { label: "Trade Win %", value: `${fnum(stats.wr, 1)}%`, sub: `${stats.wins}W ${stats.losses}L${stats.longs + stats.shorts > 0 ? ` ${stats.longs}L/${stats.shorts}S` : ''}`, trioBadge: true, wins: stats.wins, losses: stats.losses, be: stats.n - stats.wins - stats.losses }),
             React.createElement(TopCard, { label: "Avg win/loss trade", value: fnum(stats.avgRR || 0), sub: `${f$(stats.avgW)} / −${f$(stats.avgL)}`, twoBar: true, avgW: stats.avgW, avgL: stats.avgL }),
-            React.createElement(TopCard, { label: "Total Fees", value: f$(stats.totalFees), sub: stats.totalSwapFees > 0 ? `Trade ${f$(stats.totalTradeFees || 0, 0)} · Swap ${f$(stats.totalSwapFees || 0, 0)}` : `0.04% per leg · ${stats.n} trades`, accent: C.yellow, swapNote: stats.swapTrades > 0 ? `${stats.swapTrades} overnight trade${stats.swapTrades === 1 ? '' : 's'}` : null })),
+            React.createElement(TopCard, { label: "Total Fees", value: f$(stats.totalFees), tradeFees: stats.totalTradeFees || 0, swapFees: stats.totalSwapFees || 0, accent: C.yellow })),
         React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 2fr 1.3fr', gap: 10 } },
             React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column' } },
                 React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 } },
@@ -1051,13 +1059,20 @@ function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit }) {
         React.createElement(DashCalendar, { dailyPnl: dailyPnl, dailyCount: dailyCount, trades: allTrades || [] })));
 }
 // ─── Top stat card (matches Tradezella exactly) ───────────────────────────────
-function TopCard({ label, value, sub, accent, badge, gauge, gaugeVal, trioBadge, wins, losses, be, twoBar, avgW, avgL, swapNote }) {
+function TopCard({ label, value, sub, accent, badge, gauge, gaugeVal, trioBadge, wins, losses, be, twoBar, avgW, avgL, swapNote, tradeFees, swapFees }) {
     return (React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', position: 'relative', overflow: 'hidden' } },
         React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 } },
             React.createElement("span", { style: { fontSize: 10, color: C.textDim, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, lineHeight: 1.3 } }, label),
             badge && React.createElement("span", { style: { fontSize: 9, background: 'rgba(91,141,238,0.2)', color: C.blue, padding: '2px 6px', borderRadius: 3, fontWeight: 700 } }, badge)),
         React.createElement("div", { style: { fontFamily: C.mono, fontSize: 22, fontWeight: 700, color: accent || C.text, letterSpacing: '-0.02em', lineHeight: 1.1, marginBottom: 4 } }, value),
-        sub && !gauge && !trioBadge && !twoBar && React.createElement("div", { style: { fontSize: 10, color: C.textDim } }, sub),
+        tradeFees != null && (React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 1, marginTop: 2 } },
+            React.createElement("div", { style: { fontSize: 10, color: C.yellow } },
+                "Commission \u2212",
+                f$(tradeFees)),
+            React.createElement("div", { style: { fontSize: 10, color: '#a07af0' } },
+                "Swap \u2212",
+                f$(swapFees || 0)))),
+        sub && tradeFees == null && !gauge && !trioBadge && !twoBar && React.createElement("div", { style: { fontSize: 10, color: C.textDim } }, sub),
         swapNote && React.createElement("div", { style: { fontSize: 9, color: '#a07af0', marginTop: 3, letterSpacing: '0.04em' } },
             "\u27F3 ",
             swapNote,
@@ -1615,7 +1630,13 @@ function PropFirmTab({ ps, sett, setSett, trades }) {
                                     React.createElement("stop", { offset: "5%", stopColor: sc, stopOpacity: 0.2 }),
                                     React.createElement("stop", { offset: "95%", stopColor: sc, stopOpacity: 0 }))),
                             React.createElement(XAxis, { dataKey: "idx", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false }),
-                            React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${(v / 1000).toFixed(2)}k`, width: 58, domain: [ps.floor - 100, ps.sz + ps.pt + 100] }),
+                            (() => {
+                                const lo = ps.floor - 100, hi = ps.sz + ps.pt + 100;
+                                const ticks = [];
+                                for (let v = Math.ceil(lo / 100) * 100; v <= hi; v += 100)
+                                    ticks.push(v);
+                                return (React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${(v / 1000).toFixed(1)}k`, width: 54, ticks: ticks, domain: [lo, hi] }));
+                            })(),
                             React.createElement(Tooltip, { contentStyle: { background: C.bg, border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono, borderRadius: 6, color: C.text }, itemStyle: { color: C.text }, formatter: v => [f$(v), 'Equity'], labelFormatter: l => `Trade #${l}` }),
                             React.createElement(ReferenceLine, { y: ps.sz, stroke: C.border2, strokeDasharray: "3 3", label: { value: 'Start', fill: C.textFaint, fontSize: 9, position: 'insideTopRight' } }),
                             React.createElement(ReferenceLine, { y: ps.floor, stroke: C.red, strokeDasharray: "3 3", label: { value: 'DD Floor', fill: C.red, fontSize: 9, position: 'insideTopRight' } }),
@@ -1816,9 +1837,9 @@ function ReportTab({ stats, trades, dailyPnl, dailyCount, weeklyStats, sett }) {
                     React.createElement(Row, { label: "Max consecutive wins", value: stats.lW, color: C.green }),
                     React.createElement(Row, { label: "Max consecutive losses", value: stats.lL, color: C.red })),
                 React.createElement(Section, { title: "Fees" },
-                    React.createElement(Row, { label: "Total commissions (trade fees)", value: `−${f$(totalCommissions)}`, color: C.yellow }),
-                    React.createElement(Row, { label: "Total fees (trade + swap)", value: `−${f$(stats.totalFees || totalCommissions + totalSwap)}`, color: C.yellow }),
-                    React.createElement(Row, { label: "Total swap", value: totalSwap > 0 ? `−${f$(totalSwap)}` : '—', color: totalSwap > 0 ? '#a07af0' : C.textDim })),
+                    React.createElement(Row, { label: "Commission (0.04% per leg)", value: `−${f$(totalCommissions)}`, color: C.yellow }),
+                    React.createElement(Row, { label: "Swap fee (0.033% per midnight)", value: totalSwap > 0 ? `−${f$(totalSwap)}` : '—', color: totalSwap > 0 ? '#a07af0' : C.textDim }),
+                    React.createElement(Row, { label: "Total fees", value: `−${f$(totalCommissions + totalSwap)}`, color: C.red })),
                 React.createElement(Section, { title: "Hold Times" },
                     React.createElement(Row, { label: "Average hold time (All trades)", value: fmtDHM(avgHold) }),
                     React.createElement(Row, { label: "Average hold time (Winning trades)", value: fmtDHM(avgWinHold), color: C.green }),
