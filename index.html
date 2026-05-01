@@ -476,14 +476,14 @@ const fnum = (n, dp = 2) => { if (n == null || !isFinite(n))
 const fdate = ts => new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
 const fdateS = ts => new Date(ts).toLocaleString('en-GB', { month: 'short', day: '2-digit' });
 const isoDay = ts => new Date(ts).toISOString().slice(0, 10);
-// Week key: Sun–Sat, keyed as YYYY-WNN where week 1 starts on the first Sunday of the year
+// Week key: Mon–Sun
 const isoWeek = ts => {
     const d = new Date(ts);
-    const day = d.getUTCDay(); // 0=Sun
-    const sun = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day));
-    const jan1 = new Date(Date.UTC(sun.getUTCFullYear(), 0, 1));
-    const weekNum = Math.floor(((sun - jan1) / 86400000) / 7) + 1;
-    return `${sun.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+    const day = (d.getUTCDay() + 6) % 7; // 0=Mon
+    const mon = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day));
+    const jan1 = new Date(Date.UTC(mon.getUTCFullYear(), 0, 1));
+    const weekNum = Math.floor(((mon - jan1) / 86400000) / 7) + 1;
+    return `${mon.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
 };
 const sessionOf = ts => { const h = new Date(ts).getUTCHours(); if (h < 7)
     return 'Asia'; if (h < 12)
@@ -832,8 +832,8 @@ function App() {
             if (!m[w]) {
                 // Derive the Sunday of this week from the trade's entry time
                 const d = new Date(t.entryTime);
-                const sunday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - d.getUTCDay()));
-                m[w] = { week: w, n: 0, wins: 0, pnl: 0, first: sunday.toISOString().slice(0, 10) };
+                const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7)));
+                m[w] = { week: w, n: 0, wins: 0, pnl: 0, first: monday.toISOString().slice(0, 10) };
             }
             m[w].n++;
             m[w].pnl += t.pnlNet;
@@ -1118,7 +1118,7 @@ function DashCalendar({ dailyPnl, dailyCount, trades }) {
     const ym = `${viewDate.getUTCFullYear()}-${String(viewDate.getUTCMonth() + 1).padStart(2, '0')}`;
     const label = new Date(ym + '-01T00:00:00Z').toLocaleString('en-GB', { month: 'long', year: 'numeric' });
     const d0 = new Date(ym + '-01T00:00:00Z');
-    const fdow = d0.getUTCDay();
+    const fdow = (d0.getUTCDay() + 6) % 7; // Mon=0, Tue=1 … Sun=6
     const dim = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 0)).getUTCDate();
     const today = new Date().toISOString().slice(0, 10);
     const prev = () => { const d = new Date(viewDate); d.setUTCMonth(d.getUTCMonth() - 1); setViewDate(d); setSelectedDay(null); setSelectedWeek(null); };
@@ -1172,7 +1172,7 @@ function DashCalendar({ dailyPnl, dailyCount, trades }) {
                 React.createElement("div", { style: { fontSize: 9, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 } }, l),
                 React.createElement("div", { style: { fontFamily: C.mono, fontSize: 14, fontWeight: 700, color: col } }, v)))))),
         React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(7,1fr) 160px', background: C.main } },
-            ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (React.createElement("div", { key: d, style: { padding: '8px 4px', textAlign: 'center', fontSize: 11, color: C.textDim, fontWeight: 600, borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` } }, d))),
+            ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (React.createElement("div", { key: d, style: { padding: '8px 4px', textAlign: 'center', fontSize: 11, color: C.textDim, fontWeight: 600, borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` } }, d))),
             React.createElement("div", { style: { padding: '8px 12px', fontSize: 11, color: C.textDim, fontWeight: 600, borderBottom: `1px solid ${C.border}`, textAlign: 'center' } }, "Weekly Summary")),
         React.createElement("div", null, weeks.map((week, wi) => (React.createElement("div", { key: wi, style: { display: 'grid', gridTemplateColumns: 'repeat(7,1fr) 160px', borderBottom: wi < weeks.length - 1 ? `1px solid ${C.border}` : 'none' } },
             week.days.map((key, di) => {
@@ -1274,30 +1274,43 @@ function DashCalendar({ dailyPnl, dailyCount, trades }) {
                     React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse', fontSize: 12 } },
                         React.createElement("thead", { style: { position: 'sticky', top: 0, background: '#0f1520' } },
                             React.createElement("tr", null, ['Open Time', 'Close Time', 'Symbol', 'Side', 'Hold', 'Entry', 'Exit', 'Gross P&L', 'Commission', 'Swap', 'RR', 'Net P&L'].map(h => (React.createElement("th", { key: h, style: { padding: '7px 10px', borderBottom: `1px solid ${C.border}`, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 600, textAlign: ['Gross P&L', 'Commission', 'Swap', 'RR', 'Net P&L'].includes(h) ? 'right' : 'left', whiteSpace: 'nowrap' } }, h))))),
-                        React.createElement("tbody", null, activeWeek.trades.slice().sort((a, b) => a.exitTime - b.exitTime).map(t => {
-                            const holdMs = t.exitTime && t.entryTime ? t.exitTime - t.entryTime : 0;
-                            const h = Math.floor(holdMs / 3600000), m = Math.floor((holdMs % 3600000) / 60000), d = Math.floor(h / 24);
-                            const holdStr = d > 0 ? `${d}d ${h % 24}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
-                            return (React.createElement("tr", { key: t.id, style: { borderBottom: `1px solid ${C.border}` }, onMouseEnter: e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)', onMouseLeave: e => e.currentTarget.style.background = 'transparent' },
-                                React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.entryTime)),
-                                React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.exitTime)),
-                                React.createElement("td", { style: { padding: '7px 10px', fontWeight: 700, color: C.text } }, t.symbol.replace('BYBIT:', '')),
-                                React.createElement("td", { style: { padding: '7px 10px' } },
-                                    React.createElement("span", { style: { fontSize: 9, padding: '3px 8px', borderRadius: 3, background: t.direction === 'long' ? C.greenBg : C.redBg, color: t.direction === 'long' ? C.green : C.red, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' } }, t.direction)),
-                                React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, color: C.textDim, whiteSpace: 'nowrap' } }, holdStr),
-                                React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11 } }, f$(t.entryPrice, 2)),
-                                React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11 } }, f$(t.exitPrice, 2)),
-                                React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 12, fontWeight: 600, textAlign: 'right', color: t.pnl >= 0 ? C.green : C.red } }, f$(t.pnl)),
-                                React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: C.yellow } },
-                                    "\u2212",
-                                    f$(t.tradeFee || t.fees)),
-                                React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: '#a07af0' } }, (t.swapDays || 0) > 0 ? `−${f$(t.swapFee || 0)}` : '—'),
-                                React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: t.rMultipleNet >= 0 ? C.green : C.red, fontWeight: 600 } },
-                                    t.rMultipleNet >= 0 ? '+' : '',
-                                    fnum(t.rMultipleNet, 2),
-                                    "R"),
-                                React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 12, fontWeight: 700, textAlign: 'right', color: t.pnlNet >= 0 ? C.green : C.red } }, f$(t.pnlNet))));
-                        }))))))),
+                        React.createElement("tbody", null, (() => {
+                            const sorted = activeWeek.trades.slice().sort((a, b) => a.exitTime - b.exitTime);
+                            const rows = [];
+                            let lastDay = '';
+                            for (const t of sorted) {
+                                const day = isoDay(t.exitTime);
+                                if (day !== lastDay) {
+                                    rows.push(React.createElement("tr", { key: 'div-' + day, style: { background: 'rgba(255,255,255,0.03)' } },
+                                        React.createElement("td", { colSpan: 12, style: { padding: '6px 14px', borderTop: `2px solid ${C.border2}`, borderBottom: `1px solid ${C.border}` } },
+                                            React.createElement("span", { style: { fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase' } }, new Date(day + 'T00:00:00Z').toLocaleString('en-GB', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })))));
+                                    lastDay = day;
+                                }
+                                const holdMs = t.exitTime && t.entryTime ? t.exitTime - t.entryTime : 0;
+                                const h = Math.floor(holdMs / 3600000), m = Math.floor((holdMs % 3600000) / 60000), d = Math.floor(h / 24);
+                                const holdStr = d > 0 ? `${d}d ${h % 24}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+                                rows.push(React.createElement("tr", { key: t.id, style: { borderBottom: `1px solid ${C.border}` }, onMouseEnter: e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)', onMouseLeave: e => e.currentTarget.style.background = 'transparent' },
+                                    React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.entryTime)),
+                                    React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, color: C.textDim, whiteSpace: 'nowrap' } }, fdate(t.exitTime)),
+                                    React.createElement("td", { style: { padding: '7px 10px', fontWeight: 700, color: C.text } }, t.symbol.replace('BYBIT:', '')),
+                                    React.createElement("td", { style: { padding: '7px 10px' } },
+                                        React.createElement("span", { style: { fontSize: 9, padding: '3px 8px', borderRadius: 3, background: t.direction === 'long' ? C.greenBg : C.redBg, color: t.direction === 'long' ? C.green : C.red, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' } }, t.direction)),
+                                    React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, color: C.textDim, whiteSpace: 'nowrap' } }, holdStr),
+                                    React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11 } }, f$(t.entryPrice, 2)),
+                                    React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11 } }, f$(t.exitPrice, 2)),
+                                    React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 12, fontWeight: 600, textAlign: 'right', color: t.pnl >= 0 ? C.green : C.red } }, f$(t.pnl)),
+                                    React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: C.yellow } },
+                                        "\u2212",
+                                        f$(t.tradeFee || t.fees)),
+                                    React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: '#a07af0' } }, (t.swapDays || 0) > 0 ? `−${f$(t.swapFee || 0)}` : '—'),
+                                    React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: t.rMultipleNet >= 0 ? C.green : C.red, fontWeight: 600 } },
+                                        t.rMultipleNet >= 0 ? '+' : '',
+                                        fnum(t.rMultipleNet, 2),
+                                        "R"),
+                                    React.createElement("td", { style: { padding: '7px 10px', fontFamily: C.mono, fontSize: 12, fontWeight: 700, textAlign: 'right', color: t.pnlNet >= 0 ? C.green : C.red } }, f$(t.pnlNet))));
+                            }
+                            return rows;
+                        })())))))),
         selectedDay && (React.createElement("div", { style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 8px' }, onClick: () => setSelectedDay(null) },
             React.createElement("div", { style: { background: '#131c2e', border: `1px solid ${C.border2}`, borderRadius: 12, width: 'calc(100vw - 260px)', maxWidth: 1200, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 80px rgba(0,0,0,0.7)' }, onClick: e => e.stopPropagation() },
                 React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 22px', borderBottom: `1px solid ${C.border}` } },
