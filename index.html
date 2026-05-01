@@ -172,7 +172,7 @@ const C = {
     sans: '"DM Sans", "Inter", system-ui, sans-serif',
 };
 // ─── Storage ──────────────────────────────────────────────────────────────────
-const SK = 'trades:v1', SS = 'settings:v1', SM = 'metadata:v1', SB = 'balance:v1', SI = 'lastimport:v1';
+const SK = 'trades:v1', SS = 'settings:v1', SM = 'metadata:v1', SB = 'balance:v1', SI = 'lastimport:v1', SN = 'notes:v1';
 const DEF = {
     startingBalance: 10000, riskPerTrade: 10, feeRate: 0.04, swapRate: 0.033,
     propAccountSize: 5000, propProfitTargetPct: 10, propDailyLossPct: 3,
@@ -520,6 +520,13 @@ function App() {
     const [balanceHistory, setBalanceHistory] = useState([]); // [{time,balance,equity}]
     const [meta, setMeta] = useState({});
     const [sett, setSett] = useState(DEF);
+    const [stratNotes, setStratNotes] = useState(() => { try {
+        const s = localStorage.getItem(SN);
+        return s ? JSON.parse(s) : [{ id: '1', title: 'Strategy Notes', body: '', createdAt: Date.now() }];
+    }
+    catch (_a) {
+        return [{ id: '1', title: 'Strategy Notes', body: '', createdAt: Date.now() }];
+    } });
     const [tab, setTab] = useState('dashboard');
     const [msg, setMsg] = useState(null);
     const [sk, setSk] = useState('exitTime');
@@ -573,6 +580,10 @@ function App() {
     catch (_a) { } };
     const saveM = n => { setMeta(n); try {
         localStorage.setItem(SM, JSON.stringify(n));
+    }
+    catch (_a) { } };
+    const saveNotes = n => { setStratNotes(n); try {
+        localStorage.setItem(SN, JSON.stringify(n));
     }
     catch (_a) { } };
     const saveBal = n => { setBalanceHistory(n); try {
@@ -965,7 +976,7 @@ function App() {
                 msg.s,
                 React.createElement("button", { onClick: () => setMsg(null), style: { marginLeft: 'auto', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, lineHeight: 1 } }, "\u00D7")),
             React.createElement("div", { style: { flex: 1, overflowY: 'auto', overflowX: 'hidden', position: 'relative' } }, !trades.length ? React.createElement(EmptyState, { onPick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, sett: sett, setSett: saveS }) : (React.createElement(React.Fragment, null,
-                tab === 'dashboard' && statsWithBalance && React.createElement(Dashboard, { stats: statsWithBalance, sett: sett, dailyPnl: dailyPnl, dailyCount: dailyCount, allTrades: filtered, onEdit: setEditing }),
+                tab === 'dashboard' && statsWithBalance && React.createElement(Dashboard, { stats: statsWithBalance, sett: sett, dailyPnl: dailyPnl, dailyCount: dailyCount, allTrades: filtered, onEdit: setEditing, stratNotes: stratNotes, saveNotes: saveNotes }),
                 tab === 'analytics' && statsWithBalance && React.createElement(Analytics, { stats: statsWithBalance, sessionStats: sessionStats, hourStats: hourStats, setupStats: setupStats, execStats: execStats, trades: filtered }),
                 tab === 'report' && statsWithBalance && React.createElement(ReportTab, { stats: statsWithBalance, trades: filtered, dailyPnl: balanceDailyPnl || dailyPnl, dailyCount: dailyCount, weeklyStats: weeklyStats, sett: sett }),
                 tab === 'trades' && React.createElement(TradesTab, { trades: sortedTrades, sk: sk, sd: sd, doSort: doSort, onEdit: setEditing }),
@@ -1001,7 +1012,7 @@ function EmptyState({ onPick, sett, setSett }) {
                     React.createElement("input", { type: "number", value: sett.startingBalance, onChange: e => setSett({ ...sett, startingBalance: parseFloat(e.target.value) || 0 }), style: { background: C.main, border: `1px solid ${C.border2}`, color: C.text, padding: '8px 12px', fontFamily: C.mono, fontSize: 13, borderRadius: 5, outline: 'none', width: 160, textAlign: 'center' } }))))));
 }
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit }) {
+function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, stratNotes, saveNotes }) {
     const pc = stats.netPnl >= 0 ? C.green : C.red;
     const last30 = stats.dailyArr.slice(-30);
     const scoreAxes = [
@@ -1059,7 +1070,9 @@ function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit }) {
                 React.createElement("div", { style: { display: 'flex', alignItems: 'baseline', gap: 3 } },
                     React.createElement("span", { style: { fontFamily: C.mono, fontSize: 34, fontWeight: 700, color: scoreColour, lineHeight: 1 } }, totalScore),
                     React.createElement("span", { style: { fontSize: 12, color: C.textDim } }, "/100")))),
-        React.createElement(DashCalendar, { dailyPnl: dailyPnl, dailyCount: dailyCount, trades: allTrades || [] })));
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '280px 1fr', gap: 10, alignItems: 'start' } },
+            React.createElement(NotesPanel, { notes: stratNotes, saveNotes: saveNotes }),
+            React.createElement(DashCalendar, { dailyPnl: dailyPnl, dailyCount: dailyCount, trades: allTrades || [] }))));
 }
 function TopCard({ label, value, sub, accent, badge, gauge, gaugeVal, trioBadge, wins, losses, be, twoBar, avgW, avgL, swapNote, tradeFees, swapFees }) {
     return (React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '20px 22px', position: 'relative', overflow: 'hidden' } },
@@ -1096,6 +1109,48 @@ function TopCard({ label, value, sub, accent, badge, gauge, gaugeVal, trioBadge,
                 React.createElement("span", { style: { fontSize: 10, color: C.red } },
                     "-",
                     f$(avgL)))))));
+}
+// ─── Strategy Notes Panel ─────────────────────────────────────────────────────
+function NotesPanel({ notes, saveNotes }) {
+    var _a;
+    const [selected, setSelected] = useState(((_a = notes[0]) === null || _a === void 0 ? void 0 : _a.id) || null);
+    const [editingTitle, setEditingTitle] = useState(null);
+    const [titleVal, setTitleVal] = useState('');
+    const activeNote = notes.find(n => n.id === selected) || notes[0];
+    const addNote = () => {
+        const id = Date.now().toString();
+        const next = [...notes, { id, title: 'New Note', body: '', createdAt: Date.now() }];
+        saveNotes(next);
+        setSelected(id);
+    };
+    const deleteNote = id => {
+        var _a;
+        if (notes.length <= 1)
+            return;
+        const next = notes.filter(n => n.id !== id);
+        saveNotes(next);
+        setSelected(((_a = next[0]) === null || _a === void 0 ? void 0 : _a.id) || null);
+    };
+    const updateBody = body => {
+        saveNotes(notes.map(n => n.id === activeNote.id ? { ...n, body } : n));
+    };
+    const updateTitle = id => {
+        saveNotes(notes.map(n => n.id === id ? { ...n, title: titleVal.trim() || n.title } : n));
+        setEditingTitle(null);
+    };
+    return (React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, display: 'flex', flexDirection: 'column', minHeight: 400 } },
+        React.createElement("div", { style: { padding: '11px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 } },
+            React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: '0.05em' } }, "Strategy Notes"),
+            React.createElement("button", { onClick: addNote, style: { background: 'rgba(74,127,212,0.15)', border: `1px solid rgba(74,127,212,0.35)`, color: C.blue, cursor: 'pointer', padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 4, fontFamily: C.sans } }, "+ New")),
+        React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 0, borderBottom: `1px solid ${C.border}`, maxHeight: 140, overflowY: 'auto', flexShrink: 0 } }, notes.map(n => (React.createElement("div", { key: n.id, onClick: () => setSelected(n.id), style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', cursor: 'pointer', background: selected === n.id ? 'rgba(74,127,212,0.12)' : C.card, borderBottom: `1px solid ${C.border}`, transition: 'background 0.1s' }, onMouseEnter: e => { if (selected !== n.id)
+                e.currentTarget.style.background = C.cardHov; }, onMouseLeave: e => { e.currentTarget.style.background = selected === n.id ? 'rgba(74,127,212,0.12)' : C.card; } },
+            editingTitle === n.id ? (React.createElement("input", { autoFocus: true, value: titleVal, onChange: e => setTitleVal(e.target.value), onBlur: () => updateTitle(n.id), onKeyDown: e => { if (e.key === 'Enter')
+                    updateTitle(n.id); if (e.key === 'Escape')
+                    setEditingTitle(null); }, onClick: e => e.stopPropagation(), style: { flex: 1, background: 'transparent', border: 'none', borderBottom: `1px solid ${C.blue}`, color: C.text, fontSize: 12, fontWeight: 600, fontFamily: C.sans, outline: 'none', padding: '0 2px' } })) : (React.createElement("span", { onDoubleClick: e => { e.stopPropagation(); setEditingTitle(n.id); setTitleVal(n.title); }, style: { fontSize: 12, fontWeight: selected === n.id ? 700 : 400, color: selected === n.id ? C.text : C.textDim, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: "Double-click to rename" }, n.title)),
+            notes.length > 1 && (React.createElement("button", { onClick: e => { e.stopPropagation(); deleteNote(n.id); }, style: { background: 'none', border: 'none', color: C.textFaint, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 0 0 8px', flexShrink: 0 }, onMouseEnter: e => e.currentTarget.style.color = C.red, onMouseLeave: e => e.currentTarget.style.color = C.textFaint }, "\u00D7")))))),
+        activeNote && (React.createElement("div", { style: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } },
+            React.createElement("textarea", { value: activeNote.body, onChange: e => updateBody(e.target.value), placeholder: 'Write your strategy notes here...\n\nE.g.:\n• Entry rules\n• What to look for\n• Risk rules\n• Lessons learned', style: { flex: 1, background: 'transparent', border: 'none', color: C.text, padding: '14px 16px', fontSize: 12, fontFamily: C.sans, outline: 'none', resize: 'none', lineHeight: 1.8, minHeight: 200 } }),
+            React.createElement("div", { style: { padding: '8px 14px', borderTop: `1px solid ${C.border}`, fontSize: 9, color: C.textFaint, flexShrink: 0 } }, "double-click tab to rename")))));
 }
 // ─── Dashboard Calendar — full featured ──────────────────────────────────────
 function DashCalendar({ dailyPnl, dailyCount, trades }) {
