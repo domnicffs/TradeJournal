@@ -11,8 +11,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; background: #0b1929; color: #c8d8e8; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 13px; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; background: #0b1929; color: #c8d8e8; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 13px; overscroll-behavior: none; }
+input, button, select, textarea { -webkit-appearance: none; touch-action: manipulation; }
+@media (max-width: 767px) { html { font-size: 12px; } }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #0d1f30; }
 ::-webkit-scrollbar-thumb { background: #1e3a4a; border-radius: 3px; }
@@ -528,6 +530,8 @@ function App() {
     catch (_a) {
         return [{ id: '1', title: 'Strategy Notes', body: '', createdAt: Date.now() }];
     } });
+    const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+    useEffect(() => { const h = () => setIsMobile(window.innerWidth < 768); window.addEventListener('resize', h); h(); return () => window.removeEventListener('resize', h); }, []);
     const [tab, setTab] = useState('dashboard');
     const [msg, setMsg] = useState(null);
     const [sk, setSk] = useState('exitTime');
@@ -927,8 +931,11 @@ function App() {
         { id: 'propfirm', icon: React.createElement(IconShield, { size: 18 }), label: 'Prop Firm' },
         { id: 'settings', icon: React.createElement(IconGear, { size: 18 }), label: 'Settings' },
     ];
-    return (React.createElement("div", { style: { display: 'flex', height: '100vh', background: C.bg, fontFamily: C.sans, fontSize: 13, color: C.text, overflow: 'hidden' } },
-        React.createElement("div", { style: { width: 220, background: C.bg, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0 } },
+    return (React.createElement("div", { style: { display: 'flex', height: '100dvh', width: '100%', background: C.bg, fontFamily: C.sans, fontSize: 13, color: C.text, overflow: 'hidden' } },
+        isMobile && (React.createElement("div", { style: { position: 'fixed', bottom: 0, left: 0, right: 0, height: 60, background: C.bg, borderTop: `1px solid ${C.border}`, display: 'flex', zIndex: 100, flexShrink: 0 } }, NAV.map(n => (React.createElement("button", { key: n.id, onClick: () => setTab(n.id), style: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, border: 'none', background: 'transparent', color: tab === n.id ? C.blue : C.textFaint, fontFamily: C.sans, fontSize: 9, fontWeight: tab === n.id ? 700 : 400, cursor: 'pointer', padding: '6px 2px', letterSpacing: '0.04em', textTransform: 'uppercase' } },
+            React.createElement("span", { style: { opacity: tab === n.id ? 1 : 0.55 } }, n.icon),
+            n.label))))),
+        !isMobile && (React.createElement("div", { style: { width: 220, background: C.bg, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0 } },
             React.createElement("div", { style: { padding: '20px 20px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 12 } },
                 React.createElement("div", { style: { width: 36, height: 36, borderRadius: 9, background: 'linear-gradient(135deg,#5b8dee,#3a6fd8)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } },
                     React.createElement("svg", { width: 20, height: 20, viewBox: "0 0 20 20", fill: "none" },
@@ -957,31 +964,35 @@ function App() {
                 lastImport.newCount > 0 && React.createElement("div", { style: { color: C.green } },
                     "+",
                     lastImport.newCount,
-                    " new trades")))),
+                    " new trades"))))),
         React.createElement("div", { style: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: C.main } },
-            React.createElement("div", { style: { height: 54, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', padding: '0 24px', gap: 12, flexShrink: 0 } },
-                React.createElement("div", { style: { fontWeight: 700, fontSize: 17, color: C.text, flex: 1, letterSpacing: '-0.01em' } }, ((_a = NAV.find(n => n.id === tab)) === null || _a === void 0 ? void 0 : _a.label) || 'Dashboard'),
-                trades.length > 0 && React.createElement("div", { style: { display: 'flex', gap: 8, alignItems: 'center' } }, [['Symbol', fSym, setFSym, [['all', 'All symbols'], ...symbols.map(s => [s, s])]], ['Direction', fDir, setFDir, [['all', 'All directions'], ['long', 'Longs'], ['short', 'Shorts']]], ['Setup', fSetup, setFSetup, [['all', 'All setups'], ...SETUPS.map(s => [s, s])]]].map(([label, val, set, opts]) => (React.createElement("select", { key: label, value: val, onChange: e => set(e.target.value), style: { background: C.card, border: `1px solid ${C.border2}`, color: C.text, padding: '6px 10px', fontSize: 12, fontFamily: C.sans, borderRadius: 5, cursor: 'pointer', outline: 'none' } }, opts.map(([v, l]) => React.createElement("option", { key: v, value: v }, l)))))),
-                React.createElement("div", { style: { display: 'flex', gap: 8, alignItems: 'center' } },
-                    React.createElement("button", { onClick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, style: btnStyle, title: "Import CSV (or press I, or drag & drop anywhere)" },
+            React.createElement("div", { style: { height: isMobile ? 50 : 54, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', padding: isMobile ? '0 14px' : '0 24px', gap: 8, flexShrink: 0 } },
+                isMobile && (React.createElement("div", { style: { width: 28, height: 28, borderRadius: 7, background: 'linear-gradient(135deg,#5b8dee,#3a6fd8)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } },
+                    React.createElement("svg", { width: 14, height: 14, viewBox: "0 0 20 20", fill: "none" },
+                        React.createElement("polyline", { points: "2,15 7,8 11,12 15,5 18,8", stroke: "white", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round" })))),
+                React.createElement("div", { style: { fontWeight: 700, fontSize: isMobile ? 15 : 17, color: C.text, flex: 1, letterSpacing: '-0.01em' } }, ((_a = NAV.find(n => n.id === tab)) === null || _a === void 0 ? void 0 : _a.label) || 'Dashboard'),
+                trades.length > 0 && !isMobile && React.createElement("div", { style: { display: 'flex', gap: 8, alignItems: 'center' } }, [['Symbol', fSym, setFSym, [['all', 'All symbols'], ...symbols.map(s => [s, s])]], ['Direction', fDir, setFDir, [['all', 'All directions'], ['long', 'Longs'], ['short', 'Shorts']]], ['Setup', fSetup, setFSetup, [['all', 'All setups'], ...SETUPS.map(s => [s, s])]]].map(([label, val, set, opts]) => (React.createElement("select", { key: label, value: val, onChange: e => set(e.target.value), style: { background: C.card, border: `1px solid ${C.border2}`, color: C.text, padding: '6px 10px', fontSize: 12, fontFamily: C.sans, borderRadius: 5, cursor: 'pointer', outline: 'none' } }, opts.map(([v, l]) => React.createElement("option", { key: v, value: v }, l)))))),
+                React.createElement("div", { style: { display: 'flex', gap: 6, alignItems: 'center' } },
+                    React.createElement("button", { onClick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, style: { ...btnStyle, padding: isMobile ? '6px 10px' : '6px 12px' }, title: "Import CSV" },
                         React.createElement(IconImport, { size: 13 }),
-                        " Import ",
-                        React.createElement("span", { style: { fontSize: 9, color: C.textFaint, marginLeft: 2 } }, "[I]")),
+                        !isMobile && React.createElement(React.Fragment, null,
+                            " Import ",
+                            React.createElement("span", { style: { fontSize: 9, color: C.textFaint, marginLeft: 2 } }, "[I]"))),
                     React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: 'none' } }),
-                    React.createElement("button", { onClick: doExport, disabled: !trades.length, style: btnStyle },
+                    !isMobile && React.createElement("button", { onClick: doExport, disabled: !trades.length, style: btnStyle },
                         React.createElement(IconExport, { size: 13 }),
                         " Export"),
                     React.createElement("button", { onClick: clearAll, disabled: !trades.length && !balanceHistory.length, style: { ...btnStyle, color: '#c06060', borderColor: 'rgba(224,82,82,0.3)' } },
                         React.createElement(IconTrash, { size: 13 })))),
-            msg && React.createElement("div", { style: { padding: '8px 20px', fontSize: 12, background: msg.t === 'ok' ? 'rgba(76,175,125,0.1)' : 'rgba(224,82,82,0.1)', borderBottom: `1px solid ${msg.t === 'ok' ? C.greenBd : C.redBd}`, color: msg.t === 'ok' ? C.green : C.red, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 } },
+            msg && React.createElement("div", { style: { padding: '8px 16px', fontSize: 12, background: msg.t === 'ok' ? 'rgba(76,175,125,0.1)' : 'rgba(224,82,82,0.1)', borderBottom: `1px solid ${msg.t === 'ok' ? C.greenBd : C.redBd}`, color: msg.t === 'ok' ? C.green : C.red, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 } },
                 msg.s,
                 React.createElement("button", { onClick: () => setMsg(null), style: { marginLeft: 'auto', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, lineHeight: 1 } }, "\u00D7")),
-            React.createElement("div", { style: { flex: 1, overflowY: 'auto', overflowX: 'hidden', position: 'relative' } }, !trades.length ? React.createElement(EmptyState, { onPick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, sett: sett, setSett: saveS }) : (React.createElement(React.Fragment, null,
-                tab === 'dashboard' && statsWithBalance && React.createElement(Dashboard, { stats: statsWithBalance, sett: sett, dailyPnl: dailyPnl, dailyCount: dailyCount, allTrades: filtered, onEdit: setEditing, stratNotes: stratNotes, saveNotes: saveNotes }),
-                tab === 'analytics' && statsWithBalance && React.createElement(Analytics, { stats: statsWithBalance, sessionStats: sessionStats, hourStats: hourStats, setupStats: setupStats, execStats: execStats, trades: filtered }),
+            React.createElement("div", { style: { flex: 1, overflowY: 'auto', overflowX: 'hidden', position: 'relative', paddingBottom: isMobile ? 64 : 0 } }, !trades.length ? React.createElement(EmptyState, { onPick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, sett: sett, setSett: saveS }) : (React.createElement(React.Fragment, null,
+                tab === 'dashboard' && statsWithBalance && React.createElement(Dashboard, { stats: statsWithBalance, sett: sett, dailyPnl: dailyPnl, dailyCount: dailyCount, allTrades: filtered, onEdit: setEditing, stratNotes: stratNotes, saveNotes: saveNotes, isMobile: isMobile }),
+                tab === 'analytics' && statsWithBalance && React.createElement(Analytics, { stats: statsWithBalance, sessionStats: sessionStats, hourStats: hourStats, setupStats: setupStats, execStats: execStats, trades: filtered, isMobile: isMobile }),
                 tab === 'report' && statsWithBalance && React.createElement(ReportTab, { stats: statsWithBalance, trades: filtered, dailyPnl: balanceDailyPnl || dailyPnl, dailyCount: dailyCount, weeklyStats: weeklyStats, sett: sett }),
-                tab === 'trades' && React.createElement(TradesTab, { trades: sortedTrades, sk: sk, sd: sd, doSort: doSort, onEdit: setEditing }),
-                tab === 'propfirm' && propStats && React.createElement(PropFirmTab, { ps: propStats, sett: sett, setSett: saveS, trades: filtered }),
+                tab === 'trades' && React.createElement(TradesTab, { trades: sortedTrades, sk: sk, sd: sd, doSort: doSort, onEdit: setEditing, isMobile: isMobile }),
+                tab === 'propfirm' && propStats && React.createElement(PropFirmTab, { ps: propStats, sett: sett, setSett: saveS, trades: filtered, isMobile: isMobile }),
                 tab === 'settings' && React.createElement(SettingsTab, { sett: sett, setSett: saveS }))))),
         dragging && (React.createElement("div", { style: { position: 'fixed', inset: 0, background: 'rgba(11,25,41,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, pointerEvents: 'none', border: `3px dashed ${C.blue}`, borderRadius: 0 } },
             React.createElement("div", { style: { textAlign: 'center' } },
@@ -1013,7 +1024,187 @@ function EmptyState({ onPick, sett, setSett }) {
                     React.createElement("input", { type: "number", value: sett.startingBalance, onChange: e => setSett({ ...sett, startingBalance: parseFloat(e.target.value) || 0 }), style: { background: C.main, border: `1px solid ${C.border2}`, color: C.text, padding: '8px 12px', fontFamily: C.mono, fontSize: 13, borderRadius: 5, outline: 'none', width: 160, textAlign: 'center' } }))))));
 }
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, stratNotes, saveNotes }) {
+// ─── Widget Grid System ───────────────────────────────────────────────────────
+// 12-column grid, each cell = 1 unit. Widgets store {id, col, row, w, h, hidden}
+const WIDGET_STORAGE_KEY = 'widget-layout:v2';
+const PROP_WIDGET_STORAGE_KEY = 'prop-widget-layout:v2';
+const GRID_COLS = 12;
+const ROW_H = 8; // px per row unit (used for height calculation)
+// Default layouts
+const DASH_DEFAULT_WIDGETS = [
+    { id: 'netpnl', col: 0, row: 0, w: 3, h: 7, hidden: false },
+    { id: 'profitfactor', col: 3, row: 0, w: 3, h: 7, hidden: false },
+    { id: 'winrate', col: 6, row: 0, w: 3, h: 7, hidden: false },
+    { id: 'avgwinloss', col: 9, row: 0, w: 3, h: 7, hidden: false },
+    { id: 'cumchart', col: 0, row: 7, w: 7, h: 20, hidden: false },
+    { id: 'dailychart', col: 7, row: 7, w: 5, h: 20, hidden: false },
+    { id: 'calendar', col: 0, row: 27, w: 9, h: 36, hidden: false },
+    { id: 'score', col: 9, row: 27, w: 3, h: 12, hidden: false },
+    { id: 'expectancy', col: 9, row: 39, w: 3, h: 8, hidden: false },
+    { id: 'fees', col: 9, row: 47, w: 3, h: 8, hidden: false },
+    { id: 'notes', col: 0, row: 63, w: 12, h: 20, hidden: false },
+];
+const PROP_DEFAULT_WIDGETS = [
+    { id: 'status', col: 0, row: 0, w: 3, h: 14, hidden: false },
+    { id: 'todaypnl', col: 3, row: 0, w: 3, h: 14, hidden: false },
+    { id: 'limits', col: 6, row: 0, w: 6, h: 14, hidden: false },
+    { id: 'curve', col: 0, row: 14, w: 9, h: 30, hidden: false },
+    { id: 'feesummary', col: 9, row: 14, w: 3, h: 18, hidden: false },
+    { id: 'clock', col: 9, row: 32, w: 3, h: 12, hidden: false },
+    { id: 'rules', col: 0, row: 44, w: 12, h: 14, hidden: false },
+    { id: 'history', col: 0, row: 58, w: 12, h: 36, hidden: false },
+];
+const WIDGET_LABELS = {
+    netpnl: 'Net P&L', profitfactor: 'Profit Factor', winrate: 'Win Rate', avgwinloss: 'Avg Win/Loss',
+    cumchart: 'Cumulative P&L', dailychart: 'Daily P&L', calendar: 'Calendar',
+    score: 'Score', expectancy: 'Expectancy', fees: 'Total Fees', notes: 'Strategy Notes',
+    status: 'Status', todaypnl: "Today's P&L", limits: 'Risk Limits',
+    curve: 'Equity Curve', feesummary: 'Fee Summary', clock: 'Clock',
+    rules: 'Challenge Rules', history: 'Trade History',
+};
+function useWidgetLayout(storageKey, defaults) {
+    const [widgets, setWidgets] = useState(() => {
+        try {
+            const s = localStorage.getItem(storageKey);
+            if (s) {
+                const saved = JSON.parse(s);
+                // Merge saved with defaults (add any new widgets)
+                const merged = defaults.map(d => saved.find(w => w.id === d.id) || d);
+                return merged;
+            }
+        }
+        catch (_a) { }
+        return defaults;
+    });
+    const save = (next) => {
+        setWidgets(next);
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(next));
+        }
+        catch (_a) { }
+    };
+    const update = (id, patch) => save(widgets.map(w => w.id === id ? { ...w, ...patch } : w));
+    const reset = () => save(defaults.map(d => ({ ...d })));
+    return [widgets, save, update, reset];
+}
+// The grid container converts widget units → CSS grid placement
+// Each column = 1fr, row height = 40px base unit
+function WidgetGrid({ widgets, editing, onUpdate, children }) {
+    const colW = `repeat(${GRID_COLS}, 1fr)`;
+    return (React.createElement("div", { style: {
+            display: 'grid',
+            gridTemplateColumns: colW,
+            gridAutoRows: '40px',
+            gap: editing ? '6px' : '8px',
+            padding: '0 4px',
+        } }, children));
+}
+function WidgetShell({ w, editing, onUpdate, children, label }) {
+    const dragRef = useRef(null);
+    const [dragging, setDragging] = useState(false);
+    const [resizing, setResizing] = useState(false);
+    const gridRef = useRef(null);
+    // Find parent grid element
+    const getGrid = (el) => {
+        let p = el === null || el === void 0 ? void 0 : el.parentElement;
+        while (p && !p.dataset.widgetgrid)
+            p = p.parentElement;
+        return p;
+    };
+    const startDrag = (e) => {
+        if (!editing)
+            return;
+        e.preventDefault();
+        const startX = e.clientX, startY = e.clientY;
+        const origCol = w.col, origRow = w.row;
+        let lastCol = origCol, lastRow = origRow;
+        const grid = getGrid(dragRef.current);
+        if (!grid)
+            return;
+        const gridRect = grid.getBoundingClientRect();
+        const colWidth = gridRect.width / GRID_COLS;
+        const rowHeight = 40 + 6; // row + gap
+        setDragging(true);
+        const move = (me) => {
+            const dx = me.clientX - startX, dy = me.clientY - startY;
+            const newCol = Math.max(0, Math.min(GRID_COLS - w.w, origCol + Math.round(dx / colWidth)));
+            const newRow = Math.max(0, origRow + Math.round(dy / rowHeight));
+            if (newCol !== lastCol || newRow !== lastRow) {
+                lastCol = newCol;
+                lastRow = newRow;
+                onUpdate(w.id, { col: newCol, row: newRow });
+            }
+        };
+        const up = () => {
+            setDragging(false);
+            window.removeEventListener('mousemove', move);
+            window.removeEventListener('mouseup', up);
+        };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up);
+    };
+    const startResize = (e) => {
+        if (!editing)
+            return;
+        e.preventDefault();
+        e.stopPropagation();
+        const startX = e.clientX, startY = e.clientY;
+        const origW = w.w, origH = w.h;
+        const grid = getGrid(dragRef.current);
+        if (!grid)
+            return;
+        const gridRect = grid.getBoundingClientRect();
+        const colWidth = gridRect.width / GRID_COLS;
+        const rowHeight = 40 + 6;
+        setResizing(true);
+        const move = (me) => {
+            const dx = me.clientX - startX, dy = me.clientY - startY;
+            const newW = Math.max(1, Math.min(GRID_COLS - w.col, origW + Math.round(dx / colWidth)));
+            const newH = Math.max(2, origH + Math.round(dy / rowHeight));
+            onUpdate(w.id, { w: newW, h: newH });
+        };
+        const up = () => {
+            setResizing(false);
+            window.removeEventListener('mousemove', move);
+            window.removeEventListener('mouseup', up);
+        };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up);
+    };
+    if (w.hidden)
+        return null;
+    return (React.createElement("div", { ref: dragRef, style: {
+            gridColumn: `${w.col + 1} / span ${w.w}`,
+            gridRow: `${w.row + 1} / span ${w.h}`,
+            position: 'relative',
+            overflow: editing ? 'visible' : 'hidden',
+            cursor: editing && !dragging ? 'grab' : dragging ? 'grabbing' : 'default',
+            transition: dragging || resizing ? 'none' : 'box-shadow 0.15s',
+            boxShadow: editing ? `0 0 0 2px ${C.blue}40, 0 4px 20px rgba(0,0,0,0.3)` : 'none',
+            borderRadius: 10,
+            userSelect: 'none',
+        }, onMouseDown: startDrag },
+        editing && (React.createElement("div", { style: {
+                position: 'absolute', top: -22, left: 0, right: 0, height: 22,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                paddingLeft: 8, paddingRight: 4, zIndex: 10,
+                fontSize: 9, fontWeight: 700, color: C.blue, textTransform: 'uppercase', letterSpacing: '0.1em',
+            } },
+            React.createElement("span", null,
+                "\u283F ",
+                label),
+            React.createElement("button", { onMouseDown: e => e.stopPropagation(), onClick: e => { e.stopPropagation(); onUpdate(w.id, { hidden: true }); }, style: { background: 'rgba(224,82,82,0.15)', border: `1px solid ${C.red}`, color: C.red, cursor: 'pointer', padding: '2px 6px', fontSize: 9, borderRadius: 3, fontFamily: C.sans, lineHeight: 1 } }, "Hide"))),
+        React.createElement("div", { style: { height: '100%', overflow: 'hidden', borderRadius: 10, pointerEvents: dragging ? 'none' : 'auto' } }, children),
+        editing && (React.createElement("div", { onMouseDown: startResize, style: {
+                position: 'absolute', bottom: -4, right: -4, width: 16, height: 16,
+                background: C.blue, borderRadius: '50%', cursor: 'se-resize',
+                zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: `0 0 0 2px ${C.bg}`,
+            } },
+            React.createElement("svg", { width: "8", height: "8", viewBox: "0 0 8 8", fill: "white", opacity: "0.8" },
+                React.createElement("path", { d: "M1 7L7 1M4 7L7 4M7 7L7 7", stroke: "white", strokeWidth: "1.5", strokeLinecap: "round" }))))));
+}
+function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, stratNotes, saveNotes, isMobile }) {
     const pc = stats.netPnl >= 0 ? C.green : C.red;
     const last30 = stats.dailyArr.slice(-30);
     const scoreAxes = [
@@ -1028,67 +1219,117 @@ function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, strat
     const scoreColour = totalScore >= 70 ? C.green : totalScore >= 45 ? C.yellow : C.red;
     const lastPnl = stats.curve.length > 1 ? stats.curve[stats.curve.length - 1].pnl : 0;
     const cc = lastPnl >= 0 ? C.green : C.red;
-    return (React.createElement("div", { style: { padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 } },
-        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 } },
-            React.createElement(TopCard, { label: "Net P&L", value: f$(stats.netPnl), sub: fpct(stats.netPnl / sett.startingBalance * 100) + ' return', accent: pc, badge: String(stats.n) + ' trades' }),
-            React.createElement(TopCard, { label: "Profit Factor", value: fnum(isFinite(stats.pf) ? stats.pf : 0), sub: `${f$(stats.gW, 0)} wins · ${f$(stats.gL, 0)} losses`, gauge: true, gaugeVal: Math.min(1, stats.pf / 3) }),
-            React.createElement(TopCard, { label: "Win Rate", value: `${fnum(stats.wr, 1)}%`, sub: `${stats.wins}W · ${stats.losses}L`, trioBadge: true, wins: stats.wins, losses: stats.losses, be: stats.n - stats.wins - stats.losses }),
-            React.createElement(TopCard, { label: "Avg Win / Loss", value: `${fnum(stats.avgRR || 0, 2)}R`, sub: `${f$(stats.avgW, 0)} win · ${f$(stats.avgL, 0)} loss`, twoBar: true, avgW: stats.avgW, avgL: stats.avgL })),
-        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 10 } },
-            React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' } },
-                React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 } }, "Daily Net Cumulative P&L"),
-                React.createElement(ResponsiveContainer, { width: "100%", height: 140 },
-                    React.createElement(AreaChart, { data: stats.curve, margin: { top: 2, right: 4, left: 0, bottom: 0 } },
-                        React.createElement("defs", null,
-                            React.createElement("linearGradient", { id: "eqG", x1: "0", y1: "0", x2: "0", y2: "1" },
-                                React.createElement("stop", { offset: "5%", stopColor: cc, stopOpacity: 0.3 }),
-                                React.createElement("stop", { offset: "95%", stopColor: cc, stopOpacity: 0 }))),
-                        React.createElement(XAxis, { dataKey: "idx", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: i => i % Math.ceil(stats.n / 5) === 0 ? `#${i}` : '' }),
-                        React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => { const a = Math.abs(v); return (v < 0 ? '-$' : '$') + (a >= 1000 ? (a / 1000).toFixed(1) + 'k' : a.toFixed(0)); }, width: 44 }),
-                        React.createElement(Tooltip, { contentStyle: { background: C.bg, border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono, borderRadius: 6, color: C.text }, labelStyle: { color: C.textDim }, itemStyle: { color: C.text }, formatter: v => [f$(v), 'P&L'], labelFormatter: l => `Trade #${l}` }),
-                        React.createElement(ReferenceLine, { y: 0, stroke: C.border2, strokeDasharray: "2 4" }),
-                        React.createElement(Area, { type: "monotone", dataKey: "pnl", stroke: cc, strokeWidth: 2, fill: "url(#eqG)", dot: false })))),
-            React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' } },
-                React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 } }, "Net Daily P&L"),
-                React.createElement(ResponsiveContainer, { width: "100%", height: 140 },
-                    React.createElement(BarChart, { data: last30, margin: { top: 2, right: 4, left: 0, bottom: 0 } },
-                        React.createElement(XAxis, { dataKey: "d", stroke: C.textFaint, fontSize: 8, tickLine: false, axisLine: false, interval: Math.ceil(last30.length / 5) - 1 }),
-                        React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${v.toFixed(0)}`, width: 44 }),
-                        React.createElement(Tooltip, { contentStyle: { background: C.bg, border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono, borderRadius: 6, color: C.text }, itemStyle: { color: C.text }, formatter: v => [f$(v), 'P&L'] }),
-                        React.createElement(ReferenceLine, { y: 0, stroke: C.border2 }),
-                        React.createElement(Bar, { dataKey: "pnl", radius: [3, 3, 0, 0], maxBarSize: 16 }, last30.map((d, i) => React.createElement(Cell, { key: i, fill: d.pnl >= 0 ? C.green : C.red }))))))),
-        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 220px', gap: 10, alignItems: 'start' } },
-            React.createElement(DashCalendar, { dailyPnl: dailyPnl, dailyCount: dailyCount, trades: allTrades || [] }),
-            React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
-                React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' } },
-                    React.createElement("div", { style: { fontSize: 9, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, marginBottom: 10 } }, "Your Score"),
-                    React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10 } },
-                        React.createElement(ResponsiveContainer, { width: 72, height: 72 },
-                            React.createElement(RadarChart, { data: scoreAxes, margin: { top: 6, right: 6, bottom: 6, left: 6 } },
-                                React.createElement(PolarGrid, { stroke: C.border2, strokeDasharray: "3 3" }),
-                                React.createElement(PolarAngleAxis, { dataKey: "subject", tick: { fill: C.textFaint, fontSize: 6, fontFamily: C.sans } }),
-                                React.createElement(Radar, { dataKey: "value", stroke: scoreColour, fill: scoreColour, fillOpacity: 0.18, dot: false }))),
-                        React.createElement("div", null,
-                            React.createElement("div", { style: { display: 'flex', alignItems: 'baseline', gap: 2 } },
-                                React.createElement("span", { style: { fontFamily: C.mono, fontSize: 36, fontWeight: 700, color: scoreColour, lineHeight: 1 } }, totalScore),
-                                React.createElement("span", { style: { fontSize: 11, color: C.textDim } }, "/100")),
-                            React.createElement("div", { style: { height: 3, background: C.border, borderRadius: 2, overflow: 'hidden', marginTop: 6, width: 80 } },
-                                React.createElement("div", { style: { height: '100%', width: `${totalScore}%`, background: `linear-gradient(90deg,${C.red},${C.yellow},${C.green})`, borderRadius: 2 } }))))),
-                React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' } },
-                    React.createElement("div", { style: { fontSize: 9, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, marginBottom: 6 } }, "Trade Expectancy"),
-                    React.createElement("div", { style: { fontFamily: C.mono, fontSize: 22, fontWeight: 700, color: stats.expectancy >= 0 ? C.green : C.red, lineHeight: 1 } }, f$(stats.expectancy)),
-                    React.createElement("div", { style: { fontSize: 10, color: C.textDim, marginTop: 4 } }, "avg net per trade")),
-                React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' } },
-                    React.createElement("div", { style: { fontSize: 9, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, marginBottom: 6 } }, "Total Fees"),
-                    React.createElement("div", { style: { fontFamily: C.mono, fontSize: 22, fontWeight: 700, color: C.yellow, lineHeight: 1 } }, f$(stats.totalFees)),
-                    React.createElement("div", { style: { marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 } },
-                        React.createElement("div", { style: { fontSize: 10, color: C.yellow } },
+    const [editing, setEditing] = useState(false);
+    const [widgets, , updateWidget, resetWidgets] = useWidgetLayout(WIDGET_STORAGE_KEY, DASH_DEFAULT_WIDGETS);
+    const W = (id) => widgets.find(w => w.id === id);
+    const hidden = widgets.filter(w => w.hidden).map(w => w.id);
+    // Shared card style
+    const card = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, height: '100%', overflow: 'hidden' };
+    const cardPad = { padding: '14px 16px' };
+    const cardTitle = { fontSize: 9, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 };
+    const renderWidget = (id) => {
+        const wdef = W(id);
+        if (!wdef || wdef.hidden)
+            return null;
+        let content;
+        switch (id) {
+            case 'netpnl':
+                content = React.createElement("div", { style: { ...card, ...cardPad, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' } },
+                    React.createElement(TopCard, { label: "Net P&L", value: f$(stats.netPnl), sub: fpct(stats.netPnl / sett.startingBalance * 100) + ' return', accent: pc, badge: String(stats.n) + ' trades' }));
+                break;
+            case 'profitfactor':
+                content = React.createElement("div", { style: { ...card, ...cardPad } },
+                    React.createElement(TopCard, { label: "Profit Factor", value: fnum(isFinite(stats.pf) ? stats.pf : 0), sub: `${f$(stats.gW, 0)} wins · ${f$(stats.gL, 0)} losses`, gauge: true, gaugeVal: Math.min(1, stats.pf / 3) }));
+                break;
+            case 'winrate':
+                content = React.createElement("div", { style: { ...card, ...cardPad } },
+                    React.createElement(TopCard, { label: "Win Rate", value: `${fnum(stats.wr, 1)}%`, sub: `${stats.wins}W · ${stats.losses}L`, trioBadge: true, wins: stats.wins, losses: stats.losses, be: stats.n - stats.wins - stats.losses }));
+                break;
+            case 'avgwinloss':
+                content = React.createElement("div", { style: { ...card, ...cardPad } },
+                    React.createElement(TopCard, { label: "Avg Win / Loss", value: `${fnum(stats.avgRR || 0, 2)}R`, sub: `${f$(stats.avgW, 0)} win · ${f$(stats.avgL, 0)} loss`, twoBar: true, avgW: stats.avgW, avgL: stats.avgL }));
+                break;
+            case 'cumchart':
+                content = React.createElement("div", { style: { ...card, ...cardPad } },
+                    React.createElement("div", { style: cardTitle }, "Daily Net Cumulative P&L"),
+                    React.createElement(ResponsiveContainer, { width: "100%", height: "88%" },
+                        React.createElement(AreaChart, { data: stats.curve, margin: { top: 2, right: 4, left: 0, bottom: 0 } },
+                            React.createElement("defs", null,
+                                React.createElement("linearGradient", { id: "eqG", x1: "0", y1: "0", x2: "0", y2: "1" },
+                                    React.createElement("stop", { offset: "5%", stopColor: cc, stopOpacity: 0.3 }),
+                                    React.createElement("stop", { offset: "95%", stopColor: cc, stopOpacity: 0 }))),
+                            React.createElement(XAxis, { dataKey: "idx", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: i => i % Math.ceil(stats.n / 5) === 0 ? `#${i}` : '' }),
+                            React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => { const a = Math.abs(v); return (v < 0 ? '-$' : '$') + (a >= 1000 ? (a / 1000).toFixed(1) + 'k' : a.toFixed(0)); }, width: 44 }),
+                            React.createElement(Tooltip, { contentStyle: { background: C.bg, border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono, borderRadius: 6, color: C.text }, labelStyle: { color: C.textDim }, itemStyle: { color: C.text }, formatter: v => [f$(v), 'P&L'], labelFormatter: l => `Trade #${l}` }),
+                            React.createElement(ReferenceLine, { y: 0, stroke: C.border2, strokeDasharray: "2 4" }),
+                            React.createElement(Area, { type: "monotone", dataKey: "pnl", stroke: cc, strokeWidth: 2, fill: "url(#eqG)", dot: false }))));
+                break;
+            case 'dailychart':
+                content = React.createElement("div", { style: { ...card, ...cardPad } },
+                    React.createElement("div", { style: cardTitle }, "Net Daily P&L"),
+                    React.createElement(ResponsiveContainer, { width: "100%", height: "88%" },
+                        React.createElement(BarChart, { data: last30, margin: { top: 2, right: 4, left: 0, bottom: 0 } },
+                            React.createElement(XAxis, { dataKey: "d", stroke: C.textFaint, fontSize: 8, tickLine: false, axisLine: false, interval: Math.ceil(last30.length / 5) - 1 }),
+                            React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${v.toFixed(0)}`, width: 44 }),
+                            React.createElement(Tooltip, { contentStyle: { background: C.bg, border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono, borderRadius: 6, color: C.text }, itemStyle: { color: C.text }, formatter: v => [f$(v), 'P&L'] }),
+                            React.createElement(ReferenceLine, { y: 0, stroke: C.border2 }),
+                            React.createElement(Bar, { dataKey: "pnl", radius: [3, 3, 0, 0], maxBarSize: 16 }, last30.map((d, i) => React.createElement(Cell, { key: i, fill: d.pnl >= 0 ? C.green : C.red }))))));
+                break;
+            case 'calendar':
+                content = React.createElement("div", { style: { ...card, overflow: 'auto' } },
+                    React.createElement(DashCalendar, { dailyPnl: dailyPnl, dailyCount: dailyCount, trades: allTrades || [] }));
+                break;
+            case 'score':
+                content = React.createElement("div", { style: { ...card, ...cardPad, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 8 } },
+                    React.createElement("div", { style: { fontSize: 9, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700 } }, "Your Score"),
+                    React.createElement(ResponsiveContainer, { width: 80, height: 80 },
+                        React.createElement(RadarChart, { data: scoreAxes, margin: { top: 6, right: 6, bottom: 6, left: 6 } },
+                            React.createElement(PolarGrid, { stroke: C.border2, strokeDasharray: "3 3" }),
+                            React.createElement(PolarAngleAxis, { dataKey: "subject", tick: { fill: C.textFaint, fontSize: 6, fontFamily: C.sans } }),
+                            React.createElement(Radar, { dataKey: "value", stroke: scoreColour, fill: scoreColour, fillOpacity: 0.18, dot: false }))),
+                    React.createElement("div", { style: { display: 'flex', alignItems: 'baseline', gap: 2 } },
+                        React.createElement("span", { style: { fontFamily: C.mono, fontSize: 36, fontWeight: 700, color: scoreColour, lineHeight: 1 } }, totalScore),
+                        React.createElement("span", { style: { fontSize: 12, color: C.textDim } }, "/100")),
+                    React.createElement("div", { style: { height: 3, background: C.border, borderRadius: 2, overflow: 'hidden', width: 80 } },
+                        React.createElement("div", { style: { height: '100%', width: `${totalScore}%`, background: `linear-gradient(90deg,${C.red},${C.yellow},${C.green})`, borderRadius: 2 } })));
+                break;
+            case 'expectancy':
+                content = React.createElement("div", { style: { ...card, ...cardPad } },
+                    React.createElement("div", { style: cardTitle }, "Trade Expectancy"),
+                    React.createElement("div", { style: { fontFamily: C.mono, fontSize: 24, fontWeight: 700, color: stats.expectancy >= 0 ? C.green : C.red, lineHeight: 1 } }, f$(stats.expectancy)),
+                    React.createElement("div", { style: { fontSize: 10, color: C.textDim, marginTop: 4 } }, "avg net per trade"));
+                break;
+            case 'fees':
+                content = React.createElement("div", { style: { ...card, ...cardPad } },
+                    React.createElement("div", { style: cardTitle }, "Total Fees"),
+                    React.createElement("div", { style: { fontFamily: C.mono, fontSize: 24, fontWeight: 700, color: C.yellow, lineHeight: 1 } }, f$(stats.totalFees)),
+                    React.createElement("div", { style: { marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 } },
+                        React.createElement("div", { style: { fontSize: 11, color: C.yellow } },
                             "Commission \u2212",
                             f$(stats.totalTradeFees || 0)),
-                        React.createElement("div", { style: { fontSize: 10, color: '#a07af0' } },
+                        React.createElement("div", { style: { fontSize: 11, color: '#a07af0' } },
                             "Swap \u2212",
-                            f$(stats.totalSwapFees || 0)))))),
-        React.createElement(NotesPanel, { notes: stratNotes, saveNotes: saveNotes })));
+                            f$(stats.totalSwapFees || 0))));
+                break;
+            case 'notes':
+                content = React.createElement("div", { style: { ...card, overflow: 'auto' } },
+                    React.createElement(NotesPanel, { notes: stratNotes, saveNotes: saveNotes }));
+                break;
+            default: content = React.createElement("div", { style: card });
+        }
+        return (React.createElement(WidgetShell, { key: id, w: wdef, editing: editing, onUpdate: updateWidget, label: WIDGET_LABELS[id] || id }, content));
+    };
+    return (React.createElement("div", { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
+        React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: editing ? 'rgba(74,127,212,0.06)' : C.main } },
+            React.createElement("button", { onClick: () => setEditing(e => !e), style: { display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: editing ? C.blue : 'rgba(255,255,255,0.06)', border: `1px solid ${editing ? C.blue : C.border2}`, color: editing ? 'white' : C.textDim, borderRadius: 6, cursor: 'pointer', fontFamily: C.sans, fontSize: 12, fontWeight: 600 } }, editing ? '✓ Done' : '⊞ Edit Layout'),
+            editing && React.createElement(React.Fragment, null,
+                React.createElement("button", { onClick: resetWidgets, style: { padding: '6px 12px', background: 'transparent', border: `1px solid ${C.border2}`, color: C.textDim, borderRadius: 6, cursor: 'pointer', fontFamily: C.sans, fontSize: 11 } }, "Reset"),
+                React.createElement("span", { style: { fontSize: 11, color: C.textDim } }, "Drag to move \u00B7 corner handle to resize \u00B7 Hide to remove"),
+                hidden.length > 0 && (React.createElement("div", { style: { display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' } }, hidden.map(id => (React.createElement("button", { key: id, onClick: () => updateWidget(id, { hidden: false }), style: { padding: '4px 10px', background: 'rgba(74,127,212,0.12)', border: `1px solid rgba(74,127,212,0.35)`, color: C.blue, borderRadius: 5, cursor: 'pointer', fontFamily: C.sans, fontSize: 10, fontWeight: 600 } },
+                    "+ ",
+                    WIDGET_LABELS[id] || id))))))),
+        React.createElement("div", { style: { flex: 1, overflowY: 'auto', padding: editing ? '28px 12px 16px' : '12px', paddingTop: editing ? 32 : 12 }, "data-widgetgrid": "1" },
+            React.createElement("div", { style: { display: 'grid', gridTemplateColumns: `repeat(${GRID_COLS},1fr)`, gridAutoRows: '40px', gap: editing ? 6 : 8, position: 'relative' } }, widgets.map(w => renderWidget(w.id))))));
 }
 function TopCard({ label, value, sub, accent, badge, gauge, gaugeVal, trioBadge, wins, losses, be, twoBar, avgW, avgL, swapNote, tradeFees, swapFees }) {
     return (React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '20px 22px', position: 'relative', overflow: 'hidden' } },
@@ -1751,7 +1992,7 @@ function TradesTab({ trades, sk, sd, doSort, onEdit }) {
                     })))))));
 }
 // ─── Prop Firm Tab ────────────────────────────────────────────────────────────
-function PropFirmTab({ ps, sett, setSett, trades }) {
+function PropFirmTab({ ps, sett, setSett, trades, isMobile }) {
     const sc = ps.status === 'pass' ? C.green : ps.status === 'fail' ? C.red : '#f0b429';
     const [now, setNow] = useState(() => new Date());
     useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
@@ -1774,8 +2015,8 @@ function PropFirmTab({ ps, sett, setSett, trades }) {
     const swapSoon = minsToSwap <= 30;
     const ProgBar = ({ val, lim, col }) => (React.createElement("div", { style: { height: 6, background: C.border, borderRadius: 3, overflow: 'hidden', marginTop: 4 } },
         React.createElement("div", { style: { height: '100%', width: `${Math.min(100, lim > 0 ? val / lim * 100 : 0)}%`, background: col, borderRadius: 3, transition: 'width 0.3s' } })));
-    return (React.createElement("div", { style: { padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 } },
-        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '200px 160px 1fr', gap: 10 } },
+    return (React.createElement("div", { style: { padding: isMobile ? '12px 14px' : '16px 20px', display: 'flex', flexDirection: 'column', gap: isMobile ? 10 : 12 } },
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 160px 1fr', gap: 10 } },
             React.createElement("div", { style: { background: C.card, border: `2px solid ${sc}`, borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 } },
                 React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 } },
                     React.createElement("div", { style: { width: 8, height: 8, borderRadius: '50%', background: sc, boxShadow: `0 0 6px ${sc}` } }),
@@ -1815,7 +2056,7 @@ function PropFirmTab({ ps, sett, setSett, trades }) {
                     val > 0 && React.createElement("span", { style: { fontFamily: C.mono, fontSize: 9, color: bc(p) } },
                         f$(lim - val),
                         " left"))))))),
-        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 220px', gap: 10 } },
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 220px', gap: 10 } },
             React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' } },
                 React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
                     React.createElement("span", { style: { fontSize: 10, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: '0.06em' } }, "Account Equity Curve"),
