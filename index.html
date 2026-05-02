@@ -723,8 +723,16 @@ function App() {
     const balanceCurve = useMemo(() => {
         if (!balanceHistory.length)
             return null;
-        const first = balanceHistory[0].equity;
-        return balanceHistory.map((e, i) => ({ idx: i, equity: e.equity, pnl: e.equity - first, gross: e.equity - first, time: e.time }));
+        // One point per day — last equity reading of each day
+        const byDay = {};
+        for (const e of balanceHistory) {
+            const d = isoDay(e.time);
+            if (!byDay[d] || e.time >= byDay[d].time)
+                byDay[d] = e;
+        }
+        const days = Object.keys(byDay).sort();
+        const first = byDay[days[0]].equity;
+        return days.map((d, i) => ({ idx: i, equity: byDay[d].equity, pnl: byDay[d].equity - first, gross: byDay[d].equity - first, time: byDay[d].time }));
     }, [balanceHistory]);
     // Daily equity from balance history: last balance reading per UTC day
     const balanceDailyMap = useMemo(() => {
@@ -737,19 +745,27 @@ function App() {
         }
         return m; // day -> final equity that day
     }, [balanceHistory]);
-    // Daily P&L from balance: equity(day) - equity(prev day)
+    // Daily P&L from balance: equity(day) - equity(prev day), first day uses trade sum
     const balanceDailyPnl = useMemo(() => {
         if (!balanceDailyMap)
             return null;
         const days = Object.keys(balanceDailyMap).sort();
         const result = {};
+        // First day: sum trades that day from raw trades
+        const firstDay = days[0];
+        if (firstDay) {
+            const firstDayTrades = trades.filter(t => isoDay(t.exitTime) === firstDay);
+            if (firstDayTrades.length > 0) {
+                result[firstDay] = firstDayTrades.reduce((s, t) => s + (t.pnlNet || t.pnl || 0), 0);
+            }
+        }
         for (let i = 1; i < days.length; i++) {
             const prev = balanceDailyMap[days[i - 1]];
             const curr = balanceDailyMap[days[i]];
             result[days[i]] = curr - prev;
         }
         return result;
-    }, [balanceDailyMap]);
+    }, [balanceDailyMap, trades]);
     const enriched = useMemo(() => trades.map(t => { const m = meta[t.id] || {}; return { ...addFees(t, sett.feeRate, sett.swapRate, sett.riskPerTrade), note: m.note || '', setupTags: m.setupTags || [], execTags: m.execTags || [], rating: m.rating || 0 }; }), [trades, meta, sett.feeRate, sett.swapRate, sett.riskPerTrade]);
     const filtered = useMemo(() => enriched.filter(t => (fSym === 'all' || normSym(t.symbol) === fSym) && (fDir === 'all' || t.direction === fDir) && (fSetup === 'all' || t.setupTags.includes(fSetup))), [enriched, fSym, fDir, fSetup]);
     const symbols = useMemo(() => Array.from(new Set(trades.map(t => normSym(t.symbol)))), [trades]);
@@ -780,6 +796,14 @@ function App() {
             const d = isoDay(L[i].exitTime);
             dailyBars[d] = (dailyBars[d] || 0) + L[i].pnlNet;
         }
+        // Daily cumulative curve: zero anchor then one point per trading day
+        const dailyCurve = [{ idx: 0, pnl: 0, d: '' }];
+        let cumPnl = 0;
+        Object.entries(dailyBars).sort(([a], [b]) => a.localeCompare(b)).forEach(([d, pnl], i) => {
+            cumPnl += pnl;
+            const [y, m, day] = d.split('-');
+            dailyCurve.push({ idx: i + 1, pnl: cumPnl, d: `${day}-${m}` });
+        });
         let cs = 0, csS = 0, lW = 0, lL = 0;
         for (const t of L) {
             const s = t.pnlNet > 0 ? 1 : t.pnlNet < 0 ? -1 : 0;
@@ -794,8 +818,8 @@ function App() {
             if (s === -1)
                 lL = Math.max(lL, cs);
         }
-        const dailyArr = Object.entries(dailyBars).sort(([a], [b]) => a.localeCompare(b)).map(([d, pnl]) => ({ d: d.slice(5), pnl }));
-        return { n, wins: wins.length, losses: losses.length, longs: longs.length, shorts: shorts.length, longsWR: longs.length ? longs.filter(t => t.pnlNet > 0).length / longs.length * 100 : 0, shortsWR: shorts.length ? shorts.filter(t => t.pnlNet > 0).length / shorts.length * 100 : 0, netPnl, grossPnl, totalFees, totalTradeFees, totalSwapFees, swapTrades, avgFee: totalFees / n, gW, gL, wr, avgW, avgL, pf, avgRR, expectancy: netPnl / n, curve, maxDD, peak, lW, lL, finalEq: eq, finalEqG: eqG, dailyArr };
+        const dailyArr = Object.entries(dailyBars).sort(([a], [b]) => a.localeCompare(b)).map(([d, pnl]) => { const [y, m, day] = d.split('-'); return { d: `${day}-${m}`, pnl }; });
+        return { n, wins: wins.length, losses: losses.length, longs: longs.length, shorts: shorts.length, longsWR: longs.length ? longs.filter(t => t.pnlNet > 0).length / longs.length * 100 : 0, shortsWR: shorts.length ? shorts.filter(t => t.pnlNet > 0).length / shorts.length * 100 : 0, netPnl, grossPnl, totalFees, totalTradeFees, totalSwapFees, swapTrades, avgFee: totalFees / n, gW, gL, wr, avgW, avgL, pf, avgRR, expectancy: netPnl / n, curve, dailyCurve, maxDD, peak, lW, lL, finalEq: eq, finalEqG: eqG, dailyArr };
     }, [filtered, sett.startingBalance]);
     // Patch stats with real balance history data when available.
     // Win rate, R:R, setup tags etc. still come from order history.
@@ -808,11 +832,9 @@ function App() {
         const lastEntry = balanceCurve[balanceCurve.length - 1];
         const firstEntry = balanceCurve[0];
         const realFinalEq = lastEntry.equity;
-        // Rebuild daily bars from balance daily P&L
         const realDailyArr = balanceDailyPnl
-            ? Object.entries(balanceDailyPnl).sort(([a], [b]) => a.localeCompare(b)).map(([d, pnl]) => ({ d: d.slice(5), pnl }))
+            ? Object.entries(balanceDailyPnl).sort(([a], [b]) => a.localeCompare(b)).map(([d, pnl]) => { const [y, m, day] = d.split('-'); return { d: `${day}-${m}`, pnl }; })
             : stats.dailyArr;
-        // Recalculate max drawdown from the balance curve
         let peak2 = firstEntry.equity, maxDD2 = 0;
         for (const p of balanceCurve) {
             peak2 = Math.max(peak2, p.equity);
@@ -822,8 +844,7 @@ function App() {
         }
         return {
             ...stats,
-            curve: balanceCurve,
-            // Keep trade-based netPnl (includes swap fees) — don't override with raw equity delta
+            curve: stats.curve, // trade-based curve — accurate per-trade P&L progression
             finalEq: realFinalEq,
             finalEqG: realFinalEq,
             peak: peak2,
@@ -1045,8 +1066,8 @@ function TopCard({ label, value, sub, accent, badge, tradeFees, swapFees }) {
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, stratNotes, saveNotes, isMobile }) {
     const pc = stats.netPnl >= 0 ? C.green : C.red;
-    const last30 = stats.dailyArr.slice(-30);
-    const lastPnl = stats.curve.length > 1 ? stats.curve[stats.curve.length - 1].pnl : 0;
+    const last30 = stats.dailyArr;
+    const lastPnl = stats.dailyCurve && stats.dailyCurve.length > 1 ? stats.dailyCurve[stats.dailyCurve.length - 1].pnl : 0;
     const cc = lastPnl >= 0 ? C.green : C.red;
     const scoreAxes = [
         { subject: 'Win %', value: Math.min(100, stats.wr) },
@@ -1083,18 +1104,20 @@ function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, strat
                     React.createElement("span", { style: { fontSize: 10, color: C.textDim, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700 } }, "Profit Factor")),
                 React.createElement("div", { style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
                     React.createElement("div", { style: { fontFamily: C.mono, fontSize: 'clamp(22px,1.9vw,32px)', fontWeight: 700, color: C.text, letterSpacing: '-0.02em', lineHeight: 1 } }, fnum(isFinite(stats.pf) ? stats.pf : 0, 2)),
-                    (() => {
-                        const tot = stats.gW + stats.gL, wp = tot > 0 ? stats.gW / tot : 0, lp = tot > 0 ? stats.gL / tot : 0, r = 26, c = 2 * Math.PI * r;
-                        return (React.createElement("svg", { width: 64, height: 64, viewBox: "0 0 64 64" },
-                            React.createElement("circle", { cx: "32", cy: "32", r: r, fill: "none", stroke: "rgba(255,255,255,0.07)", strokeWidth: "7" }),
-                            wp > 0 && React.createElement("circle", { cx: "32", cy: "32", r: r, fill: "none", stroke: C.green, strokeWidth: "7", strokeLinecap: "round", strokeDasharray: `${wp * c} ${c}`, transform: "rotate(-90 32 32)" }),
-                            lp > 0 && React.createElement("circle", { cx: "32", cy: "32", r: r, fill: "none", stroke: C.red, strokeWidth: "7", strokeLinecap: "round", strokeDasharray: `${lp * c} ${c}`, transform: `rotate(${-90 + wp * 360} 32 32)` })));
-                    })()),
-                React.createElement("div", { style: { height: 28, display: 'flex', alignItems: 'flex-end', gap: 4 } },
-                    React.createElement("span", { style: { background: 'rgba(38,166,91,0.2)', color: C.green, padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700 } }, f$(stats.gW, 0)),
-                    React.createElement("span", { style: { background: 'rgba(224,82,82,0.2)', color: C.red, padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700 } },
-                        "\u2212",
-                        f$(stats.gL, 0)))),
+                    React.createElement("div", { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 } },
+                        (() => {
+                            const tot = stats.gW + stats.gL, wp = tot > 0 ? stats.gW / tot : 0, lp = tot > 0 ? stats.gL / tot : 0, r = 34, c = 2 * Math.PI * r;
+                            return (React.createElement("svg", { width: 82, height: 82, viewBox: "0 0 82 82" },
+                                React.createElement("circle", { cx: "41", cy: "41", r: r, fill: "none", stroke: "rgba(255,255,255,0.07)", strokeWidth: "8" }),
+                                wp > 0 && React.createElement("circle", { cx: "41", cy: "41", r: r, fill: "none", stroke: C.green, strokeWidth: "8", strokeLinecap: "round", strokeDasharray: `${wp * c} ${c}`, transform: "rotate(-90 41 41)" }),
+                                lp > 0 && React.createElement("circle", { cx: "41", cy: "41", r: r, fill: "none", stroke: C.red, strokeWidth: "8", strokeLinecap: "round", strokeDasharray: `${lp * c} ${c}`, transform: `rotate(${-90 + wp * 360} 41 41)` })));
+                        })(),
+                        React.createElement("div", { style: { display: 'flex', gap: 4 } },
+                            React.createElement("span", { style: { background: 'rgba(38,166,91,0.2)', color: C.green, padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700 } }, f$(stats.gW, 0)),
+                            React.createElement("span", { style: { background: 'rgba(224,82,82,0.2)', color: C.red, padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700 } },
+                                "\u2212",
+                                f$(stats.gL, 0))))),
+                React.createElement("div", { style: { height: 28 } })),
             React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 0 } },
                 React.createElement("div", { style: { height: 24, display: 'flex', alignItems: 'center', marginBottom: 12 } },
                     React.createElement("span", { style: { fontSize: 10, color: C.textDim, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700 } }, "Trade Win %")),
@@ -1102,17 +1125,19 @@ function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, strat
                     React.createElement("div", { style: { fontFamily: C.mono, fontSize: 'clamp(22px,1.9vw,32px)', fontWeight: 700, color: C.text, letterSpacing: '-0.02em', lineHeight: 1 } },
                         fnum(stats.wr, 1),
                         "%"),
-                    (() => {
-                        const wp = stats.n > 0 ? stats.wins / stats.n : 0, lp = stats.n > 0 ? stats.losses / stats.n : 0, r = 28, h = Math.PI * r;
-                        return (React.createElement("svg", { width: 68, height: 40, viewBox: "0 0 68 40" },
-                            React.createElement("path", { d: "M 6 36 A 28 28 0 0 1 62 36", fill: "none", stroke: "rgba(255,255,255,0.07)", strokeWidth: "7", strokeLinecap: "round" }),
-                            wp > 0 && React.createElement("path", { d: "M 6 36 A 28 28 0 0 1 62 36", fill: "none", stroke: C.green, strokeWidth: "7", strokeLinecap: "round", strokeDasharray: `${(wp * h).toFixed(1)} ${h.toFixed(1)}` }),
-                            lp > 0 && React.createElement("path", { d: "M 62 36 A 28 28 0 0 0 6 36", fill: "none", stroke: C.red, strokeWidth: "7", strokeLinecap: "round", strokeDasharray: `${(lp * h).toFixed(1)} ${h.toFixed(1)}` })));
-                    })()),
-                React.createElement("div", { style: { height: 28, display: 'flex', alignItems: 'flex-end', gap: 4 } },
-                    React.createElement("span", { style: { background: 'rgba(38,166,91,0.2)', color: C.green, padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700 } }, stats.wins),
-                    React.createElement("span", { style: { background: 'rgba(255,255,255,0.06)', color: C.textDim, padding: '2px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700 } }, stats.n - stats.wins - stats.losses),
-                    React.createElement("span", { style: { background: 'rgba(224,82,82,0.2)', color: C.red, padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700 } }, stats.losses))),
+                    React.createElement("div", { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 } },
+                        (() => {
+                            const wp = stats.n > 0 ? stats.wins / stats.n : 0, lp = stats.n > 0 ? stats.losses / stats.n : 0, r = 36, h = Math.PI * r;
+                            return (React.createElement("svg", { width: 86, height: 52, viewBox: "0 0 86 52" },
+                                React.createElement("path", { d: "M 7 48 A 36 36 0 0 1 79 48", fill: "none", stroke: "rgba(255,255,255,0.07)", strokeWidth: "8", strokeLinecap: "round" }),
+                                wp > 0 && React.createElement("path", { d: "M 7 48 A 36 36 0 0 1 79 48", fill: "none", stroke: C.green, strokeWidth: "8", strokeLinecap: "round", strokeDasharray: `${(wp * h).toFixed(1)} ${h.toFixed(1)}` }),
+                                lp > 0 && React.createElement("path", { d: "M 79 48 A 36 36 0 0 0 7 48", fill: "none", stroke: C.red, strokeWidth: "8", strokeLinecap: "round", strokeDasharray: `${(lp * h).toFixed(1)} ${h.toFixed(1)}` })));
+                        })(),
+                        React.createElement("div", { style: { display: 'flex', gap: 4 } },
+                            React.createElement("span", { style: { background: 'rgba(38,166,91,0.2)', color: C.green, padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700 } }, stats.wins),
+                            React.createElement("span", { style: { background: 'rgba(255,255,255,0.06)', color: C.textDim, padding: '2px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700 } }, stats.n - stats.wins - stats.losses),
+                            React.createElement("span", { style: { background: 'rgba(224,82,82,0.2)', color: C.red, padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700 } }, stats.losses)))),
+                React.createElement("div", { style: { height: 28 } })),
             React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 0 } },
                 React.createElement("div", { style: { height: 24, display: 'flex', alignItems: 'center', marginBottom: 12 } },
                     React.createElement("span", { style: { fontSize: 10, color: C.textDim, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700 } }, "Avg Win / Loss")),
@@ -1129,28 +1154,28 @@ function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, strat
                         React.createElement("span", { style: { color: C.red, fontFamily: C.mono } },
                             "\u2212",
                             f$(stats.avgL)))))),
-        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'minmax(200px,22%) 1fr 1fr', gap: 12, flexShrink: 0 } },
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 2fr 2fr', gap: 12, flexShrink: 0 } },
             React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column' } },
-                React.createElement("div", { style: { fontSize: 11, color: C.textDim, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 } }, "Performance Score"),
-                React.createElement("div", { style: { flex: 1, minHeight: 140 } },
+                React.createElement("div", { style: { fontSize: 10, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 } }, "Performance Score"),
+                React.createElement("div", { style: { flex: 1, minHeight: 0 } },
                     React.createElement(ResponsiveContainer, { width: "100%", height: "100%" },
-                        React.createElement(RadarChart, { data: scoreAxes, margin: { top: 20, right: 30, bottom: 20, left: 30 } },
-                            React.createElement(PolarGrid, { stroke: C.border2, strokeDasharray: "3 3" }),
-                            React.createElement(PolarAngleAxis, { dataKey: "subject", tick: { fill: C.textDim, fontSize: 10, fontFamily: C.sans } }),
-                            React.createElement(Radar, { dataKey: "value", stroke: scoreCol, fill: scoreCol, fillOpacity: 0.2, dot: { fill: scoreCol, r: 3 } })))),
-                React.createElement("div", { style: { textAlign: 'center', borderTop: `1px solid ${C.border}`, paddingTop: 12, marginTop: 4 } },
-                    React.createElement("span", { style: { fontSize: 13, color: C.textDim } }, "Your Score: "),
-                    React.createElement("span", { style: { fontFamily: C.mono, fontSize: 24, fontWeight: 700, color: scoreCol } }, totalScore),
-                    React.createElement("span", { style: { fontSize: 12, color: C.textDim } }, "/100"))),
+                        React.createElement(RadarChart, { data: scoreAxes, margin: { top: 22, right: 38, bottom: 22, left: 38 } },
+                            React.createElement(PolarGrid, { stroke: C.border2, strokeDasharray: "2 3", strokeOpacity: 0.6 }),
+                            React.createElement(PolarAngleAxis, { dataKey: "subject", tick: { fill: C.text, fontSize: 11, fontFamily: C.sans, fontWeight: 600 } }),
+                            React.createElement(Radar, { dataKey: "value", stroke: scoreCol, strokeWidth: 2, fill: scoreCol, fillOpacity: 0.25, dot: { fill: scoreCol, r: 4, strokeWidth: 0 } })))),
+                React.createElement("div", { style: { textAlign: 'center', borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 4 } },
+                    React.createElement("span", { style: { fontSize: 11, color: C.textDim } }, "Your Score: "),
+                    React.createElement("span", { style: { fontFamily: C.mono, fontSize: 18, fontWeight: 700, color: scoreCol } }, totalScore),
+                    React.createElement("span", { style: { fontSize: 10, color: C.textDim } }, "/100"))),
             React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 20px' } },
                 React.createElement("div", { style: { fontSize: 11, color: C.textDim, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 } }, "Daily Net Cumulative P&L"),
                 (() => {
-                    const vals = stats.curve.map(p => p.pnl);
+                    const vals = stats.dailyCurve.map(p => p.pnl);
                     const minV = Math.min(...vals, 0), maxV = Math.max(...vals, 0);
                     const range = maxV - minV || 1;
                     const zeroPos = Math.max(0, Math.min(1, (maxV / range)));
                     return (React.createElement(ResponsiveContainer, { width: "100%", height: 180 },
-                        React.createElement(AreaChart, { data: stats.curve, margin: { top: 4, right: 8, left: 0, bottom: 0 } },
+                        React.createElement(AreaChart, { data: stats.dailyCurve, margin: { top: 4, right: 8, left: 0, bottom: 0 } },
                             React.createElement("defs", null,
                                 React.createElement("linearGradient", { id: "eqLine", x1: "0", y1: "0", x2: "0", y2: "1" },
                                     React.createElement("stop", { offset: `${(zeroPos * 100).toFixed(1)}%`, stopColor: C.green, stopOpacity: 1 }),
@@ -1159,9 +1184,15 @@ function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, strat
                                     React.createElement("stop", { offset: `${(zeroPos * 100).toFixed(1)}%`, stopColor: C.green, stopOpacity: 0.2 }),
                                     React.createElement("stop", { offset: `${(zeroPos * 100).toFixed(1)}%`, stopColor: C.red, stopOpacity: 0.2 }),
                                     React.createElement("stop", { offset: "100%", stopColor: C.red, stopOpacity: 0 }))),
-                            React.createElement(XAxis, { dataKey: "idx", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: i => i % Math.ceil(stats.n / 5) === 0 ? `#${i}` : '' }),
+                            React.createElement(XAxis, { dataKey: "d", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, ticks: (() => { const r = [""]; let last = -3; const pts = stats.dailyCurve; for (let i = 1; i < pts.length; i++) {
+                                    if (i - last >= 3) {
+                                        r.push(pts[i].d);
+                                        last = i;
+                                    }
+                                } return r; })(), interval: 0, tickFormatter: d => d || "" }),
+                            "                ",
                             React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => { const a = Math.abs(v); return (v < 0 ? '-$' : '$') + (a >= 1000 ? (a / 1000).toFixed(1) + 'k' : a.toFixed(0)); }, width: 46 }),
-                            React.createElement(Tooltip, { ...tt, formatter: v => [f$(v), 'P&L'], labelFormatter: l => `Trade #${l}` }),
+                            React.createElement(Tooltip, { ...tt, formatter: v => [f$(v), 'P&L'], labelFormatter: l => l || '' }),
                             React.createElement(ReferenceLine, { y: 0, stroke: C.border2, strokeDasharray: "3 5" }),
                             React.createElement(Area, { type: "monotone", dataKey: "pnl", stroke: "url(#eqLine)", strokeWidth: 2.5, fill: "url(#eqFill)", dot: false }))));
                 })()),
@@ -1169,12 +1200,18 @@ function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, strat
                 React.createElement("div", { style: { fontSize: 11, color: C.textDim, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 } }, "Net Daily P&L"),
                 React.createElement(ResponsiveContainer, { width: "100%", height: 180 },
                     React.createElement(BarChart, { data: last30, margin: { top: 4, right: 8, left: 0, bottom: 0 } },
-                        React.createElement(XAxis, { dataKey: "d", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, interval: Math.ceil(last30.length / 6) - 1 }),
+                        React.createElement(XAxis, { dataKey: "d", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, ticks: (() => { const arr = last30; if (!arr.length)
+                                return []; const r = [arr[0].d]; let lastIdx = 0; for (let i = 1; i < arr.length; i++) {
+                                if (i - lastIdx >= 3) {
+                                    r.push(arr[i].d);
+                                    lastIdx = i;
+                                }
+                            } return r; })(), interval: 0 }),
                         React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${v.toFixed(0)}`, width: 46 }),
                         React.createElement(Tooltip, { ...tt, formatter: v => [f$(v), 'P&L'] }),
                         React.createElement(ReferenceLine, { y: 0, stroke: C.border2 }),
                         React.createElement(Bar, { dataKey: "pnl", radius: [4, 4, 0, 0], maxBarSize: 24 }, last30.map((d, i) => React.createElement(Cell, { key: i, fill: d.pnl >= 0 ? C.green : C.red }))))))),
-        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'minmax(180px,22%) 1fr', gap: 12, flex: 1, minHeight: 0 } },
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 4fr', gap: 12, flex: 1, minHeight: 0 } },
             React.createElement(NotesPanel, { notes: stratNotes, saveNotes: saveNotes }),
             React.createElement(DashCalendar, { dailyPnl: dailyPnl, dailyCount: dailyCount, trades: allTrades || [] }))));
 }
