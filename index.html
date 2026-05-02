@@ -12,9 +12,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-html, body { height: 100%; background: #0b1929; color: #c8d8e8; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 13px; overscroll-behavior: none; }
+html, body { height: 100%; background: #0b1929; color: #c8d8e8; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: clamp(11px, 0.85vw, 14px); overscroll-behavior: none; }
 input, button, select, textarea { -webkit-appearance: none; touch-action: manipulation; }
-@media (max-width: 767px) { html { font-size: 12px; } }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #0d1f30; }
 ::-webkit-scrollbar-thumb { background: #1e3a4a; border-radius: 3px; }
@@ -23,8 +22,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
 select { appearance: none; -webkit-appearance: none; }
 #root { height: 100%; }
-#loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; color: #00c2a8; font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.2em; background: #0b1929; }
-.spin { width: 32px; height: 32px; border: 2px solid #1e3a4a; border-top-color: #00c2a8; border-radius: 50%; animation: spin 0.8s linear infinite; }
+#loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; color: #00c2a8; font-family: 'Plus Jakarta Sans', system-ui; font-size: 14px; letter-spacing: 0.2em; background: #0b1929; }
+.spin { width: 32px; height: 32px; border: 2px solid #1e3a4a; border-top-color: #4a7fd4; border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
@@ -935,7 +934,7 @@ function App() {
         isMobile && (React.createElement("div", { style: { position: 'fixed', bottom: 0, left: 0, right: 0, height: 60, background: C.bg, borderTop: `1px solid ${C.border}`, display: 'flex', zIndex: 100, flexShrink: 0 } }, NAV.map(n => (React.createElement("button", { key: n.id, onClick: () => setTab(n.id), style: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, border: 'none', background: 'transparent', color: tab === n.id ? C.blue : C.textFaint, fontFamily: C.sans, fontSize: 9, fontWeight: tab === n.id ? 700 : 400, cursor: 'pointer', padding: '6px 2px', letterSpacing: '0.04em', textTransform: 'uppercase' } },
             React.createElement("span", { style: { opacity: tab === n.id ? 1 : 0.55 } }, n.icon),
             n.label))))),
-        !isMobile && (React.createElement("div", { style: { width: 220, background: C.bg, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0 } },
+        !isMobile && (React.createElement("div", { style: { width: 'clamp(160px, 14vw, 240px)', background: C.bg, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0 } },
             React.createElement("div", { style: { padding: '20px 20px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 12 } },
                 React.createElement("div", { style: { width: 36, height: 36, borderRadius: 9, background: 'linear-gradient(135deg,#5b8dee,#3a6fd8)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } },
                     React.createElement("svg", { width: 20, height: 20, viewBox: "0 0 20 20", fill: "none" },
@@ -1026,7 +1025,7 @@ function EmptyState({ onPick, sett, setSett }) {
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 // ─── TopCard — stat card matching Tradezella style ────────────────────────────
 function TopCard({ label, value, sub, accent, badge, gauge, gaugeVal, trioBadge, wins, losses, be, twoBar, avgW, avgL, tradeFees, swapFees }) {
-    return (React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '22px 24px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' } },
+    return (React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 'clamp(14px,1.6vh,24px) clamp(14px,1.6vw,24px)', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' } },
         React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } },
             React.createElement("span", { style: { fontSize: 11, color: C.textDim, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 } }, label),
             badge && React.createElement("span", { style: { fontSize: 10, background: 'rgba(74,127,212,0.15)', color: C.blue, padding: '3px 8px', borderRadius: 4, fontWeight: 600 } }, badge),
@@ -1048,7 +1047,7 @@ function TopCard({ label, value, sub, accent, badge, gauge, gaugeVal, trioBadge,
                         "-",
                         f$(avgL))))),
         React.createElement("div", null,
-            React.createElement("div", { style: { fontFamily: C.mono, fontSize: 28, fontWeight: 700, color: accent || C.text, letterSpacing: '-0.02em', lineHeight: 1.1, marginBottom: 4 } }, value),
+            React.createElement("div", { style: { fontFamily: C.mono, fontSize: 'clamp(20px,1.6vw,30px)', fontWeight: 700, color: accent || C.text, letterSpacing: '-0.02em', lineHeight: 1.1, marginBottom: 4 } }, value),
             tradeFees != null && React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 2 } },
                 React.createElement("div", { style: { fontSize: 10, color: C.yellow } },
                     "Commission \u2212",
@@ -1076,19 +1075,19 @@ function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, strat
     const lastPnl = stats.curve.length > 1 ? stats.curve[stats.curve.length - 1].pnl : 0;
     const cc = lastPnl >= 0 ? C.green : C.red;
     const chartTooltip = { contentStyle: { background: '#111c2d', border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono, borderRadius: 8, color: C.text, boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }, itemStyle: { color: C.text }, labelStyle: { color: C.textDim } };
-    return (React.createElement("div", { style: { padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16, height: '100%', boxSizing: 'border-box' } },
-        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12, flexShrink: 0 } },
+    return (React.createElement("div", { style: { padding: 'clamp(12px,1.5vh,24px) clamp(14px,1.8vw,28px)', display: 'flex', flexDirection: 'column', gap: 'clamp(10px,1.2vh,18px)', height: '100%', boxSizing: 'border-box' } },
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 'clamp(8px,0.8vw,14px)', flexShrink: 0 } },
             React.createElement(TopCard, { label: "Net P&L", value: f$(stats.netPnl), sub: fpct(stats.netPnl / sett.startingBalance * 100) + ' return', accent: pc, badge: String(stats.n) + ' trades' }),
             React.createElement(TopCard, { label: "Trade Expectancy", value: f$(stats.expectancy), sub: "avg per trade", accent: stats.expectancy >= 0 ? C.green : C.red }),
             React.createElement(TopCard, { label: "Profit Factor", value: fnum(isFinite(stats.pf) ? stats.pf : 0), sub: `${f$(stats.gW, 0)} wins`, gauge: true, gaugeVal: Math.min(1, (stats.pf || 0) / 3) }),
             React.createElement(TopCard, { label: "Trade Win %", value: `${fnum(stats.wr, 1)}%`, sub: `${stats.wins}W · ${stats.losses}L`, trioBadge: true, wins: stats.wins, losses: stats.losses, be: stats.n - stats.wins - stats.losses }),
             React.createElement(TopCard, { label: "Avg Win / Loss", value: `${fnum(stats.avgRR || 0, 2)}R`, sub: `${f$(stats.avgW, 0)} / -${f$(stats.avgL, 0)}`, twoBar: true, avgW: stats.avgW, avgL: stats.avgL })),
-        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '280px 1fr 1fr', gap: 12, flexShrink: 0 } },
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'clamp(200px, 18vw, 300px) 1fr 1fr', gap: 12, flexShrink: 0 } },
             React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px', display: 'flex', flexDirection: 'column' } },
                 React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 } },
                     React.createElement("span", { style: { fontSize: 11, color: C.textDim, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 } }, "Performance Score")),
                 React.createElement("div", { style: { flex: 1, minHeight: 0 } },
-                    React.createElement(ResponsiveContainer, { width: "100%", height: 160 },
+                    React.createElement(ResponsiveContainer, { width: "100%", height: "22vh" },
                         React.createElement(RadarChart, { data: scoreAxes, margin: { top: 16, right: 24, bottom: 16, left: 24 } },
                             React.createElement(PolarGrid, { stroke: C.border2, strokeDasharray: "3 3" }),
                             React.createElement(PolarAngleAxis, { dataKey: "subject", tick: { fill: C.textDim, fontSize: 10, fontFamily: C.sans } }),
@@ -1099,7 +1098,7 @@ function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, strat
                     React.createElement("span", { style: { fontSize: 12, color: C.textDim } }, "/100"))),
             React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' } },
                 React.createElement("div", { style: { fontSize: 11, color: C.textDim, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 16 } }, "Daily Net Cumulative P&L"),
-                React.createElement(ResponsiveContainer, { width: "100%", height: 180 },
+                React.createElement(ResponsiveContainer, { width: "100%", height: "22vh" },
                     React.createElement(AreaChart, { data: stats.curve, margin: { top: 4, right: 8, left: 0, bottom: 0 } },
                         React.createElement("defs", null,
                             React.createElement("linearGradient", { id: "eqG", x1: "0", y1: "0", x2: "0", y2: "1" },
@@ -1112,14 +1111,14 @@ function Dashboard({ stats, sett, dailyPnl, dailyCount, allTrades, onEdit, strat
                         React.createElement(Area, { type: "monotone", dataKey: "pnl", stroke: cc, strokeWidth: 2.5, fill: "url(#eqG)", dot: false })))),
             React.createElement("div", { style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' } },
                 React.createElement("div", { style: { fontSize: 11, color: C.textDim, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 16 } }, "Net Daily P&L"),
-                React.createElement(ResponsiveContainer, { width: "100%", height: 180 },
+                React.createElement(ResponsiveContainer, { width: "100%", height: "22vh" },
                     React.createElement(BarChart, { data: last30, margin: { top: 4, right: 8, left: 0, bottom: 0 } },
                         React.createElement(XAxis, { dataKey: "d", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, interval: Math.ceil(last30.length / 6) - 1 }),
                         React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${v.toFixed(0)}`, width: 48 }),
                         React.createElement(Tooltip, { ...chartTooltip, formatter: v => [f$(v), 'P&L'] }),
                         React.createElement(ReferenceLine, { y: 0, stroke: C.border2 }),
                         React.createElement(Bar, { dataKey: "pnl", radius: [4, 4, 0, 0], maxBarSize: 22 }, last30.map((d, i) => React.createElement(Cell, { key: i, fill: d.pnl >= 0 ? C.green : C.red }))))))),
-        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '280px 1fr', gap: 12, flex: 1, minHeight: 0 } },
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'clamp(200px, 18vw, 300px) 1fr', gap: 12, flex: 1, minHeight: 0 } },
             React.createElement(NotesPanel, { notes: stratNotes, saveNotes: saveNotes }),
             React.createElement(DashCalendar, { dailyPnl: dailyPnl, dailyCount: dailyCount, trades: allTrades || [] }))));
 }
@@ -1653,7 +1652,7 @@ function Analytics({ stats, sessionStats, hourStats, setupStats, execStats, trad
                 React.createElement("p", { style: { color: C.textDim, fontSize: 12 } }, "No execution tags yet.")))),
         React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
             React.createElement(Panel, { title: "By Session (UTC)", sub: "Asia 00\u201307 \u00B7 London 07\u201312 \u00B7 Overlap 12\u201316 \u00B7 NY 16\u201321" },
-                React.createElement(ResponsiveContainer, { width: "100%", height: 180 },
+                React.createElement(ResponsiveContainer, { width: "100%", height: "22vh" },
                     React.createElement(BarChart, { data: sessionStats, margin: { top: 10, right: 5, left: 0, bottom: 0 } },
                         React.createElement(XAxis, { dataKey: "s", stroke: C.textFaint, fontSize: 10, tickLine: false, axisLine: false }),
                         React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${v.toFixed(0)}`, width: 42 }),
@@ -1661,7 +1660,7 @@ function Analytics({ stats, sessionStats, hourStats, setupStats, execStats, trad
                         React.createElement(ReferenceLine, { y: 0, stroke: C.border2 }),
                         React.createElement(Bar, { dataKey: "pnl", radius: [3, 3, 0, 0] }, sessionStats.map((s, i) => React.createElement(Cell, { key: i, fill: s.pnl >= 0 ? C.green : C.red })))))),
             React.createElement(Panel, { title: "By Hour (UTC)" },
-                React.createElement(ResponsiveContainer, { width: "100%", height: 180 },
+                React.createElement(ResponsiveContainer, { width: "100%", height: "22vh" },
                     React.createElement(BarChart, { data: hourStats, margin: { top: 10, right: 5, left: 0, bottom: 0 } },
                         React.createElement(XAxis, { dataKey: "h", stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: h => `${h}h`, interval: 3 }),
                         React.createElement(YAxis, { stroke: C.textFaint, fontSize: 9, tickLine: false, axisLine: false, tickFormatter: v => `$${v.toFixed(0)}`, width: 42 }),
@@ -1772,7 +1771,7 @@ function PropFirmTab({ ps, sett, setSett, trades, isMobile }) {
     const ProgBar = ({ val, lim, col }) => (React.createElement("div", { style: { height: 8, background: C.border, borderRadius: 4, overflow: 'hidden', marginTop: 6 } },
         React.createElement("div", { style: { height: '100%', width: `${Math.min(100, lim > 0 ? val / lim * 100 : 0)}%`, background: col, borderRadius: 4, transition: 'width 0.3s' } })));
     const cardBase = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12 };
-    return (React.createElement("div", { style: { padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 } },
+    return (React.createElement("div", { style: { padding: 'clamp(12px,1.5vh,24px) clamp(14px,1.8vw,28px)', display: 'flex', flexDirection: 'column', gap: 'clamp(10px,1.2vh,16px)' } },
         React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 } },
             React.createElement("div", { style: { ...cardBase, border: `2px solid ${sc}`, padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 0 } },
                 React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 } },
@@ -1814,7 +1813,7 @@ function PropFirmTab({ ps, sett, setSett, trades, isMobile }) {
                         "/ ",
                         f$(ps.mddl, 0),
                         " limit")))),
-        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 300px', gap: 12 } },
+        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr clamp(220px, 18vw, 320px)', gap: 12 } },
             React.createElement("div", { style: { ...cardBase, padding: '20px 22px' } },
                 React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
                     React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: '0.06em' } }, "Account Equity Curve"),
@@ -1824,7 +1823,7 @@ function PropFirmTab({ ps, sett, setSett, trades, isMobile }) {
                         "k floor \u00B7 $",
                         ((ps.sz + ps.pt) / 1000).toFixed(1),
                         "k target")),
-                React.createElement(ResponsiveContainer, { width: "100%", height: 190 },
+                React.createElement(ResponsiveContainer, { width: "100%", height: "22vh" },
                     React.createElement(AreaChart, { data: ps.curve, margin: { top: 4, right: 12, left: 2, bottom: 2 } },
                         React.createElement("defs", null,
                             React.createElement("linearGradient", { id: "pgG", x1: "0", y1: "0", x2: "0", y2: "1" },
@@ -2027,7 +2026,7 @@ function ReportTab({ stats, trades, dailyPnl, dailyCount, weeklyStats, sett }) {
         React.createElement("div", { style: { padding: '10px 16px', borderBottom: `1px solid ${C.border}`, background: C.bg } },
             React.createElement("span", { style: { fontSize: 10, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.1em' } }, title)),
         children));
-    return (React.createElement("div", { style: { padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 } },
+    return (React.createElement("div", { style: { padding: 'clamp(12px,1.5vh,24px) clamp(14px,1.8vw,28px)', display: 'flex', flexDirection: 'column', gap: 'clamp(10px,1.2vh,16px)' } },
         React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 } }, [['Best Month', bestMonth, fmtMonth(bestMonthKey)], ['Lowest Month', worstMonth, fmtMonth(worstMonthKey)], ['Average / Month', avgMonth, 'per month']].map(([label, val, sub]) => (React.createElement("div", { key: label, style: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 20px' } },
             React.createElement("div", { style: { fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: 6 } }, label),
             React.createElement("div", { style: { fontFamily: C.mono, fontSize: 24, fontWeight: 700, color: val > 0 ? C.green : val < 0 ? C.red : C.text, lineHeight: 1, marginBottom: 4 } }, f$(val)),
