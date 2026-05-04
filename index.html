@@ -1540,7 +1540,7 @@ function Analytics({ stats, sessionStats, hourStats, setupStats, execStats, trad
     const symbolStats = useMemo(() => {
         const m = {};
         for (const t of trades) {
-            const s = t.symbol.replace('BYBIT:', '');
+            const s = normSym(t.symbol);
             if (!m[s])
                 m[s] = { sym: s, n: 0, wins: 0, losses: 0, pnl: 0, gross: 0, fees: 0, tradeFees: 0, swapFees: 0, longs: 0, longWins: 0, shorts: 0, shortWins: 0, bestTrade: -Infinity, worstTrade: Infinity, holdTotal: 0, holdCount: 0, rr: [] };
             m[s].n++;
@@ -1580,7 +1580,7 @@ function Analytics({ stats, sessionStats, hourStats, setupStats, execStats, trad
     const monthlyBySymbol = useMemo(() => {
         const m = {};
         for (const t of trades) {
-            const sym = t.symbol.replace('BYBIT:', '');
+            const sym = normSym(t.symbol);
             const mon = isoDay(t.exitTime).slice(0, 7);
             const k = `${sym}|${mon}`;
             if (!m[k])
