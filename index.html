@@ -766,7 +766,7 @@ function App() {
         }
         return result;
     }, [balanceDailyMap, trades]);
-    const enriched = useMemo(() => trades.map(t => { const m = meta[t.id] || {}; return { ...addFees(t, sett.feeRate, sett.swapRate, sett.riskPerTrade), note: m.note || '', setupTags: m.setupTags || [], execTags: m.execTags || [], rating: m.rating || 0 }; }), [trades, meta, sett.feeRate, sett.swapRate, sett.riskPerTrade]);
+    const enriched = useMemo(() => trades.map(t => { const m = meta[t.id] || {}; return { ...addFees(t, sett.feeRate, sett.swapRate, m.riskAmount || sett.riskPerTrade), note: m.note || '', setupTags: m.setupTags || [], execTags: m.execTags || [], rating: m.rating || 0, riskAmount: m.riskAmount || null }; }), [trades, meta, sett.feeRate, sett.swapRate, sett.riskPerTrade]);
     const filtered = useMemo(() => enriched.filter(t => (fSym === 'all' || normSym(t.symbol) === fSym) && (fDir === 'all' || t.direction === fDir) && (fSetup === 'all' || t.setupTags.includes(fSetup))), [enriched, fSym, fDir, fSetup]);
     const symbols = useMemo(() => Array.from(new Set(trades.map(t => normSym(t.symbol)))), [trades]);
     const stats = useMemo(() => {
@@ -1621,16 +1621,15 @@ function Analytics({ stats, sessionStats, hourStats, setupStats, execStats, trad
                                 React.createElement(Tooltip, { contentStyle: { background: C.bg, border: `1px solid ${C.border2}`, fontSize: 11, fontFamily: C.mono, borderRadius: 6, color: C.text }, itemStyle: { color: C.text }, formatter: v => [f$(v), 'Net P&L'] }),
                                 React.createElement(ReferenceLine, { y: 0, stroke: C.border2 }),
                                 React.createElement(Bar, { dataKey: "pnl", radius: [3, 3, 0, 0], maxBarSize: 32 }, months.map((m, i) => React.createElement(Cell, { key: i, fill: m.pnl >= 0 ? C.green : C.red }))))),
-                        React.createElement("div", { style: { display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' } }, months.map(m => (React.createElement("div", { key: m.mon, style: { padding: '3px 8px', borderRadius: 4, background: m.pnl >= 0 ? C.greenBg : C.redBg, border: `1px solid ${m.pnl >= 0 ? C.greenBd : C.redBd}` } },
-                            React.createElement("span", { style: { fontSize: 9, color: C.textDim } },
-                                m.mon.slice(5),
-                                " "),
-                            React.createElement("span", { style: { fontFamily: C.mono, fontSize: 10, fontWeight: 700, color: m.pnl >= 0 ? C.green : C.red } }, f$(m.pnl, 0)),
-                            React.createElement("span", { style: { fontSize: 9, color: C.textFaint } },
-                                " ",
+                        React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 8, marginTop: 8 } }, months.map(m => (React.createElement("div", { key: m.mon, style: { padding: '8px 12px', borderRadius: 6, background: m.pnl >= 0 ? C.greenBg : C.redBg, border: `1px solid ${m.pnl >= 0 ? C.greenBd : C.redBd}`, minWidth: 80, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 } },
+                            React.createElement("span", { style: { fontSize: 10, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.06em' } },
+                                new Date(m.mon + '-01T00:00:00Z').toLocaleString('en-GB', { month: 'short' })),
+                            React.createElement("span", { style: { fontFamily: C.mono, fontSize: 13, fontWeight: 700, color: m.pnl >= 0 ? C.green : C.red, lineHeight: 1 } }, f$(m.pnl, 0)),
+                            React.createElement("span", { style: { fontSize: 9, color: C.textDim, textAlign: 'center' } },
                                 m.n,
-                                "t ",
-                                m.n > 0 ? fnum(m.wins / m.n * 100, 0) + '%' : ''))))))); })()))))),
+                                " " + (m.n === 1 ? "Trade" : "Trades")),
+                            React.createElement("span", { style: { fontSize: 9, fontWeight: 700, color: m.n > 0 ? (m.wins / m.n >= 0.5 ? C.green : C.red) : C.textFaint } },
+                                m.n > 0 ? fnum(m.wins / m.n * 100, 0) + '%' : '—'))))))); })()))))),
         React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
             React.createElement(Panel, { title: "Setup Performance", sub: "Tag trades via the edit modal" }, setupStats.filter(s => s.tag !== 'Untagged').length === 0 ? React.createElement("p", { style: { color: C.textDim, fontSize: 12 } }, "No setups tagged yet.") : React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 10 } }, setupStats.filter(s => s.tag !== 'Untagged').map(s => (React.createElement("div", { key: s.tag, style: { display: 'flex', alignItems: 'center', gap: 10 } },
                 React.createElement("span", { style: { minWidth: 68, fontSize: 10, fontWeight: 700, color: C.blue, background: 'rgba(74,127,212,0.1)', border: '1px solid rgba(74,127,212,0.3)', padding: '3px 7px', borderRadius: 4, textAlign: 'center' } }, s.tag),
@@ -1912,8 +1911,7 @@ function PropFirmTab({ ps, sett, setSett, trades, isMobile }) {
                                 "\u2212",
                                 f$(totalTradeFees)),
                             React.createElement("td", { style: { padding: '10px 12px', fontFamily: C.mono, fontSize: 11, textAlign: 'right', color: '#a07af0' } },
-                                swapTrades.length,
-                                "T"),
+                                swapTrades.length + " Trade" + (swapTrades.length !== 1 ? "s" : "")),
                             React.createElement("td", { style: { padding: '10px 12px', fontFamily: C.mono, fontSize: 12, textAlign: 'right', fontWeight: 700, color: '#a07af0' } },
                                 "\u2212",
                                 f$(totalSwapFees)),
@@ -2106,6 +2104,7 @@ function SettingsTab({ sett, setSett }) {
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
 function EditModal({ trade, meta, sett, onSave, onClose, onSettChange }) {
     const [note, setNote] = useState(meta.note || '');
+    const [riskAmount, setRiskAmount] = useState(meta.riskAmount ? String(meta.riskAmount) : '');
     const [setupTags, setSetupTags] = useState(meta.setupTags || []);
     const [execTags, setExecTags] = useState(meta.execTags || []);
     const [rating, setRating] = useState(meta.rating || 0);
@@ -2168,7 +2167,13 @@ function EditModal({ trade, meta, sett, onSave, onClose, onSettChange }) {
                             [1, 2, 3, 4, 5].map(n => (React.createElement("button", { key: n, style: { background: 'none', border: 'none', cursor: 'pointer', padding: 2, fontSize: 22, color: (hov || rating) >= n ? C.yellow : '#2a3a50', lineHeight: 1 }, onMouseEnter: () => setHov(n), onMouseLeave: () => setHov(0), onClick: () => setRating(rating === n ? 0 : n) }, "\u2605"))),
                             rating > 0 && React.createElement("span", { style: { fontSize: 11, color: C.textDim, marginLeft: 4 } }, ['', 'Poor', 'Below avg', 'Average', 'Good', 'A+ Setup'][rating]))),
                     React.createElement("div", null,
-                        React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } },
+                        React.createElement("div", null,
+                        React.createElement("div", { style: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700, marginBottom: 6 } }, "Risk Amount ($)"),
+                        React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                            React.createElement("input", { type: "number", min: "0.1", step: "0.1", value: riskAmount, onChange: e => setRiskAmount(e.target.value), placeholder: String(sett.riskPerTrade || 10) + " (default)", style: { width: 160, background: C.main, border: `1px solid ${C.border2}`, color: C.text, padding: '6px 10px', fontSize: 12, fontFamily: C.mono, borderRadius: 5, outline: 'none' } }),
+                            riskAmount && React.createElement("button", { onClick: () => setRiskAmount(''), style: { background: 'none', border: `1px solid ${C.border2}`, color: C.textDim, cursor: 'pointer', padding: '5px 8px', fontSize: 10, borderRadius: 4, fontFamily: C.sans } }, "Reset to default"),
+                            React.createElement("span", { style: { fontSize: 10, color: C.textDim } }, "Default: $" + (sett.riskPerTrade || 10)))),
+                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } },
                             React.createElement("span", { style: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 700 } }, "Setup Type"),
                             React.createElement("button", { onClick: () => setEditingSetups(v => !v), style: { background: editingSetups ? 'rgba(74,127,212,0.15)' : 'transparent', border: `1px solid ${editingSetups ? 'rgba(74,127,212,0.4)' : C.border2}`, color: editingSetups ? C.blue : C.textDim, padding: '3px 10px', fontSize: 10, fontFamily: C.sans, cursor: 'pointer', borderRadius: 4, fontWeight: editingSetups ? 700 : 400 } }, editingSetups ? 'Done' : 'Edit')),
                         React.createElement("div", { style: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: editingSetups ? 8 : 0 } }, SETUPS.map(tag => (React.createElement("div", { key: tag, style: { display: 'flex', alignItems: 'center', gap: 0 } },
@@ -2195,7 +2200,7 @@ function EditModal({ trade, meta, sett, onSave, onClose, onSettChange }) {
                         React.createElement("textarea", { value: note, onChange: e => setNote(e.target.value), placeholder: "What did you see? What did you miss? A+ or B setup?", style: { background: C.main, border: `1px solid ${C.border2}`, color: C.text, padding: '10px 12px', fontSize: 12, fontFamily: C.sans, borderRadius: 5, outline: 'none', resize: 'vertical', lineHeight: 1.6, width: '100%' }, rows: 3 }))),
                 React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', borderTop: `1px solid ${C.border}` } },
                     React.createElement("button", { onClick: onClose, style: { padding: '8px 18px', background: 'transparent', border: `1px solid ${C.border2}`, color: C.textDim, fontSize: 12, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Cancel"),
-                    React.createElement("button", { onClick: () => onSave({ note, setupTags, execTags, rating, screenshot: imgSrc }), style: { padding: '8px 20px', background: C.blue, border: 'none', color: 'white', fontSize: 12, fontWeight: 700, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Save"))))));
+                    React.createElement("button", { onClick: () => onSave({ note, setupTags, execTags, rating, screenshot: imgSrc, riskAmount: riskAmount ? parseFloat(riskAmount) : null }), style: { padding: '8px 20px', background: C.blue, border: 'none', color: 'white', fontSize: 12, fontWeight: 700, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5 } }, "Save"))))));
 }
 // ─── Panel helper ──────────────────────────────────────────────────────────────
 function Panel({ title, sub, children }) {
