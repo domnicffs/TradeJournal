@@ -512,8 +512,9 @@ function addFees(t, feeRate, swapRate, riskPerTrade) {
     }
     // RR = gross P&L / risk per trade (before fees, as per user definition)
     const risk = riskPerTrade || 10;
-    const rr = parseFloat((t.pnl / risk).toFixed(2));
-    return { ...t, fees: fee, tradeFee, swapFee, swapDays, pnlNet: net, pnlPctNet: t.pnlPct - fcp, rMultipleNet: rr, rMultiple: rr };
+    const rrGross = parseFloat((t.pnl / risk).toFixed(2));
+    const rrNet = parseFloat((net / risk).toFixed(2));
+    return { ...t, fees: fee, tradeFee, swapFee, swapDays, pnlNet: net, pnlPctNet: t.pnlPct - fcp, rMultipleNet: rrNet, rMultiple: rrGross };
 }
 // ─── Main App ─────────────────────────────────────────────────────────────────
 function App() {
@@ -652,7 +653,7 @@ function App() {
                 // Merge balance-derived trades: deduplicate by symbol+exitPrice+day
                 // since order-history trades and balance-history trades for the same trade
                 // have different IDs but represent the same event
-                const dedupKey = t => `${t.symbol}|${t.exitPrice}|${isoDay(t.exitTime)}`;
+                const dedupKey = t => `${normSym(t.symbol)}|${t.entryTime}|${t.exitTime}|${t.qty}`;
                 const existingByKey = new Map(trades.map(t => [dedupKey(t), t]));
                 // Balance history trades take priority — remove any order-history duplicates
                 const orderOnlyTrades = trades.filter(t => !t.fromBalance && !balTrades.some(b => dedupKey(b) === dedupKey(t)));
@@ -677,7 +678,7 @@ function App() {
                     setMsg({ t: 'err', s: 'No valid trades found — check this is a TradingView Order History export.' });
                     return;
                 }
-                const dedupKey = t => `${t.symbol}|${t.exitPrice}|${isoDay(t.exitTime)}`;
+                const dedupKey = t => `${normSym(t.symbol)}|${t.entryTime}|${t.exitTime}|${t.qty}`;
                 const existingKeys = new Set(trades.map(dedupKey));
                 const brandNew = nt.filter(t => !existingKeys.has(dedupKey(t)));
                 // Don't overwrite balance-history trades with order-history versions
@@ -770,7 +771,7 @@ function App() {
     const filtered = useMemo(() => enriched.filter(t => (fSym === 'all' || normSym(t.symbol) === fSym) && (fDir === 'all' || t.direction === fDir) && (fSetup === 'all' || t.setupTags.includes(fSetup))), [enriched, fSym, fDir, fSetup]);
     const symbols = useMemo(() => Array.from(new Set(trades.map(t => normSym(t.symbol)))), [trades]);
     const stats = useMemo(() => {
-        const L = filtered, n = L.length;
+        const L = filtered.slice().sort((a,b) => a.exitTime - b.exitTime), n = L.length;
         if (!n)
             return null;
         const wins = L.filter(t => t.pnlNet > 0), losses = L.filter(t => t.pnlNet < 0);
@@ -781,7 +782,7 @@ function App() {
         const swapTrades = L.filter(t => (t.swapDays || 0) > 0).length;
         const gW = wins.reduce((a, t) => a + t.pnlNet, 0), gL = Math.abs(losses.reduce((a, t) => a + t.pnlNet, 0));
         const wr = wins.length / n * 100, avgW = wins.length ? gW / wins.length : 0, avgL = losses.length ? gL / losses.length : 0;
-        const pf = gL > 0 ? gW / gL : gW > 0 ? Infinity : 0, avgRR = avgL > 0 ? avgW / avgL : 0;
+        const pf = gL > 0 ? gW / gL : gW > 0 ? Infinity : 0, avgRR = n > 0 ? L.reduce((s,t) => s + (t.rMultipleNet||0), 0) / n : 0;
         let eq = sett.startingBalance, peak = eq, maxDD = 0, eqG = eq;
         const curve = [{ idx: 0, equity: eq, pnl: 0, gross: 0 }];
         const dailyBars = {};
@@ -1010,7 +1011,7 @@ function App() {
             React.createElement("div", { style: { flex: 1, overflowY: 'auto', overflowX: 'hidden', position: 'relative', paddingBottom: isMobile ? 64 : 0 } }, !trades.length ? React.createElement(EmptyState, { onPick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, sett: sett, setSett: saveS }) : (React.createElement(React.Fragment, null,
                 tab === 'dashboard' && statsWithBalance && React.createElement(Dashboard, { stats: statsWithBalance, sett: sett, dailyPnl: dailyPnl, dailyCount: dailyCount, allTrades: filtered, onEdit: setEditing, stratNotes: stratNotes, saveNotes: saveNotes, isMobile: isMobile }),
                 tab === 'analytics' && statsWithBalance && React.createElement(Analytics, { stats: statsWithBalance, sessionStats: sessionStats, hourStats: hourStats, setupStats: setupStats, execStats: execStats, trades: filtered, isMobile: isMobile }),
-                tab === 'report' && statsWithBalance && React.createElement(ReportTab, { stats: statsWithBalance, trades: filtered, dailyPnl: balanceDailyPnl || dailyPnl, dailyCount: dailyCount, weeklyStats: weeklyStats, sett: sett }),
+                tab === 'report' && statsWithBalance && React.createElement(ReportTab, { stats: statsWithBalance, trades: filtered, dailyPnl: dailyPnl, dailyCount: dailyCount, weeklyStats: weeklyStats, sett: sett }),
                 tab === 'trades' && React.createElement(TradesTab, { trades: sortedTrades, sk: sk, sd: sd, doSort: doSort, onEdit: setEditing, isMobile: isMobile }),
                 tab === 'propfirm' && propStats && React.createElement(PropFirmTab, { ps: propStats, sett: sett, setSett: saveS, trades: filtered, isMobile: isMobile }),
                 tab === 'settings' && React.createElement(SettingsTab, { sett: sett, setSett: saveS }))))),
