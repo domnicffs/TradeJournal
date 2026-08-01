@@ -522,6 +522,7 @@ function App() {
     const [trades, setTrades] = useState([]);
     const [balanceHistory, setBalanceHistory] = useState([]); // [{time,balance,equity}]
     const [meta, setMeta] = useState({});
+    const [confirmDeleteId, setConfirmDeleteId] = useState(null);
     const [sett, setSett] = useState(DEF);
     const [stratNotes, setStratNotes] = useState(() => { try {
         const s = localStorage.getItem(SN);
@@ -600,6 +601,8 @@ function App() {
     }
     catch (_a) { } };
     const upMeta = (id, p) => saveM({ ...meta, [id]: { ...(meta[id] || {}), ...p } });
+    const deleteTrade = id => setConfirmDeleteId(id);
+    const confirmDelete = () => { if (confirmDeleteId) { saveM({ ...meta, [confirmDeleteId]: { ...(meta[confirmDeleteId] || {}), hidden: true } }); setConfirmDeleteId(null); } };
     // Keyboard shortcut: press I to open file picker
     useEffect(() => {
         const onKey = e => {
@@ -767,7 +770,7 @@ function App() {
         }
         return result;
     }, [balanceDailyMap, trades]);
-    const enriched = useMemo(() => trades.map(t => { const m = meta[t.id] || {}; return { ...addFees(t, sett.feeRate, sett.swapRate, m.riskAmount || sett.riskPerTrade), note: m.note || '', setupTags: m.setupTags || [], execTags: m.execTags || [], rating: m.rating || 0, riskAmount: m.riskAmount || null }; }), [trades, meta, sett.feeRate, sett.swapRate, sett.riskPerTrade]);
+    const enriched = useMemo(() => trades.filter(t => !(meta[t.id] || {}).hidden).map(t => { const m = meta[t.id] || {}; return { ...addFees(t, sett.feeRate, sett.swapRate, m.riskAmount || sett.riskPerTrade), note: m.note || '', setupTags: m.setupTags || [], execTags: m.execTags || [], rating: m.rating || 0, riskAmount: m.riskAmount || null }; }), [trades, meta, sett.feeRate, sett.swapRate, sett.riskPerTrade]);
     const filtered = useMemo(() => enriched.filter(t => (fSym === 'all' || normSym(t.symbol) === fSym) && (fDir === 'all' || t.direction === fDir) && (fSetup === 'all' || t.setupTags.includes(fSetup))), [enriched, fSym, fDir, fSetup]);
     const symbols = useMemo(() => Array.from(new Set(trades.map(t => normSym(t.symbol)))), [trades]);
     const stats = useMemo(() => {
@@ -1012,7 +1015,7 @@ function App() {
                 tab === 'dashboard' && statsWithBalance && React.createElement(Dashboard, { stats: statsWithBalance, sett: sett, dailyPnl: dailyPnl, dailyCount: dailyCount, allTrades: filtered, onEdit: setEditing, stratNotes: stratNotes, saveNotes: saveNotes, isMobile: isMobile }),
                 tab === 'analytics' && statsWithBalance && React.createElement(Analytics, { stats: statsWithBalance, sessionStats: sessionStats, hourStats: hourStats, setupStats: setupStats, execStats: execStats, trades: filtered, isMobile: isMobile }),
                 tab === 'report' && statsWithBalance && React.createElement(ReportTab, { stats: statsWithBalance, trades: filtered, dailyPnl: dailyPnl, dailyCount: dailyCount, weeklyStats: weeklyStats, sett: sett }),
-                tab === 'trades' && React.createElement(TradesTab, { trades: sortedTrades, sk: sk, sd: sd, doSort: doSort, onEdit: setEditing, isMobile: isMobile }),
+                tab === 'trades' && React.createElement(TradesTab, { trades: sortedTrades, sk: sk, sd: sd, doSort: doSort, onEdit: setEditing, onDelete: deleteTrade, isMobile: isMobile }),
                 tab === 'propfirm' && propStats && React.createElement(PropFirmTab, { ps: propStats, sett: sett, setSett: saveS, trades: filtered, isMobile: isMobile }),
                 tab === 'settings' && React.createElement(SettingsTab, { sett: sett, setSett: saveS }))))),
         dragging && (React.createElement("div", { style: { position: 'fixed', inset: 0, background: 'rgba(11,25,41,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, pointerEvents: 'none', border: `3px dashed ${C.blue}`, borderRadius: 0 } },
@@ -1020,7 +1023,14 @@ function App() {
                 React.createElement("div", { style: { fontSize: 48, marginBottom: 16 } }, "\uD83D\uDCC2"),
                 React.createElement("div", { style: { fontFamily: C.mono, fontSize: 22, fontWeight: 700, color: C.blue, letterSpacing: '0.04em' } }, "Drop CSV to import"),
                 React.createElement("div", { style: { fontSize: 13, color: C.textDim, marginTop: 8 } }, "Order History or Balance History")))),
-        editing && React.createElement(EditModal, { trade: editing, meta: meta[editing.id] || {}, sett: sett, onSave: p => { upMeta(editing.id, p); setEditing(null); }, onClose: () => setEditing(null), onSettChange: saveS })));
+        editing && React.createElement(EditModal, { trade: editing, meta: meta[editing.id] || {}, sett: sett, onSave: p => { upMeta(editing.id, p); setEditing(null); }, onClose: () => setEditing(null), onSettChange: saveS }),
+        confirmDeleteId && React.createElement("div", { onClick: () => setConfirmDeleteId(null), style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 } },
+            React.createElement("div", { onClick: e => e.stopPropagation(), style: { background: '#131c2e', border: `1px solid ${C.border2}`, borderRadius: 12, width: 'min(420px,92vw)', padding: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.7)' } },
+                React.createElement("div", { style: { fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 10 } }, "Delete this trade?"),
+                React.createElement("div", { style: { fontSize: 14, color: C.textDim, lineHeight: 1.6, marginBottom: 22 } }, "This will permanently remove it from your journal and exclude it from every stat, chart, and report across the app. This cannot be undone."),
+                React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 10 } },
+                    React.createElement("button", { onClick: () => setConfirmDeleteId(null), style: { padding: '10px 20px', background: 'transparent', border: `1px solid ${C.border2}`, color: C.textDim, fontSize: 14, fontFamily: C.sans, cursor: 'pointer', borderRadius: 6 } }, "Cancel"),
+                    React.createElement("button", { onClick: confirmDelete, style: { padding: '10px 22px', background: C.red, border: 'none', color: 'white', fontSize: 14, fontWeight: 700, fontFamily: C.sans, cursor: 'pointer', borderRadius: 6 } }, "Delete Trade"))))));
 }
 const btnStyle = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: C.card, border: `1px solid ${C.border2}`, color: C.text, fontSize: 11, fontFamily: C.sans, cursor: 'pointer', borderRadius: 5, fontWeight: 500 };
 // ─── Empty State ──────────────────────────────────────────────────────────────
@@ -1729,7 +1739,7 @@ function Analytics({ stats, sessionStats, hourStats, setupStats, execStats, trad
                         React.createElement(ReferenceLine, { y: 0, stroke: C.border2 }),
                         React.createElement(Bar, { dataKey: "pnl", radius: [2, 2, 0, 0] }, hourStats.map((h, i) => React.createElement(Cell, { key: i, fill: h.pnl >= 0 ? C.green : C.red, opacity: h.n === 0 ? 0.1 : 1 })))))))));
 }
-function TradesTab({ trades, sk, sd, doSort, onEdit }) {
+function TradesTab({ trades, sk, sd, doSort, onEdit, onDelete }) {
     const SH = ({ k, children, align = 'left' }) => (React.createElement("th", { onClick: () => doSort(k), style: { padding: '12px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 600, cursor: 'pointer', textAlign: align, whiteSpace: 'nowrap', background: C.bg } },
         React.createElement("span", { style: { display: 'inline-flex', alignItems: 'center', gap: 3 } },
             children,
@@ -1771,11 +1781,12 @@ function TradesTab({ trades, sk, sd, doSort, onEdit }) {
                             React.createElement(SH, { k: "tradeFee", align: "right" }, "Fee"),
                             React.createElement(SH, { k: "swapDays", align: "right" }, "Swap"),
                             React.createElement(SH, { k: "rMultipleNet", align: "right" }, "RR"),
-                            React.createElement(SH, { k: "pnlNet", align: "right" }, "Net"))),
+                            React.createElement(SH, { k: "pnlNet", align: "right" }, "Net"),
+                            React.createElement("th", { style: { padding: '12px 16px', borderBottom: `1px solid ${C.border}`, background: C.bg, width: 40 } }))),
                     React.createElement("tbody", null, rows.map(row => {
                         if (row.type === 'divider')
                             return (React.createElement("tr", { key: row.key, style: { background: C.bg } },
-                                React.createElement("td", { colSpan: 16, style: { padding: '9px 16px', borderTop: `2px solid ${C.border2}`, borderBottom: `1px solid ${C.border}` } },
+                                React.createElement("td", { colSpan: 17, style: { padding: '9px 16px', borderTop: `2px solid ${C.border2}`, borderBottom: `1px solid ${C.border}` } },
                                     React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase' } }, new Date(row.day + 'T00:00:00Z').toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })))));
                         const t = row.trade;
                         const rr = t.rMultipleNet;
@@ -1804,7 +1815,10 @@ function TradesTab({ trades, sk, sd, doSort, onEdit }) {
                                 rr >= 0 ? '+' : '',
                                 fnum(rr, 2),
                                 "R"),
-                            React.createElement("td", { style: { padding: '13px 16px', fontFamily: C.mono, fontSize: 14, textAlign: 'right', color: t.pnlNet >= 0 ? C.green : C.red, fontWeight: 700 } }, f$(t.pnlNet))));
+                            React.createElement("td", { style: { padding: '13px 16px', fontFamily: C.mono, fontSize: 14, textAlign: 'right', color: t.pnlNet >= 0 ? C.green : C.red, fontWeight: 700 } }, f$(t.pnlNet)),
+                            React.createElement("td", { style: { padding: '13px 16px', textAlign: 'center' }, onClick: e => e.stopPropagation() },
+                                React.createElement("button", { onClick: () => onDelete(t.id), title: "Delete trade", style: { background: 'none', border: 'none', color: C.textFaint, cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4 }, onMouseEnter: e => { e.currentTarget.style.color = C.red; e.currentTarget.style.background = C.redBg; }, onMouseLeave: e => { e.currentTarget.style.color = C.textFaint; e.currentTarget.style.background = 'none'; } },
+                                    React.createElement(IconTrash, { size: 15 })))));
                     })))))));
 }
 // ─── Prop Firm Tab ────────────────────────────────────────────────────────────
